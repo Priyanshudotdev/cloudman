@@ -2,21 +2,79 @@ import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
 import { getVariables, varsType } from './content';
+import { AIResponseType } from '.';
 
 const iacDir = path.join(__dirname, 'iac');
 
-export const generateFiles = async (vars: varsType) => {
+export const parseFiles = (
+  { fileContent }: AIResponseType,
+  vars: varsType,
+): {
+  variables: string;
+  main: string;
+  output: string;
+  provider: string;
+} => {
+  return {
+    variables: fileContent.variables_tf
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+
+    main: fileContent.main_tf
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+
+    output: fileContent.output_tf
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+
+    provider: fileContent.provider_tf
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+  };
+};
+
+export const generateFiles = async (
+  vars: varsType,
+  fileContent: AIResponseType,
+) => {
   await fs.mkdir(iacDir, { recursive: true });
   const targetDir = path.join(iacDir, vars.name);
   await fs.mkdir(targetDir, { recursive: true });
 
-  const filesContent = await getVariables(vars);
+  // const filesContent = await getVariables(vars);
+
+  const parsedFiles = parseFiles(fileContent, vars);
 
   const files = [
-    { relPath: 'main.tf', content: filesContent.main },
-    { relPath: 'providers.tf', content: filesContent.provider },
-    { relPath: 'variables.tf', content: filesContent.variables },
-    { relPath: 'output.tf', content: filesContent.output },
+    { relPath: 'main.tf', content: parsedFiles.main },
+    { relPath: 'providers.tf', content: parsedFiles.provider },
+    { relPath: 'variables.tf', content: parsedFiles.variables },
+    { relPath: 'output.tf', content: parsedFiles.output },
   ];
 
   for (const f of files) {

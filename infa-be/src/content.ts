@@ -1,9 +1,3 @@
-// access : default = "AKIAUXVWBKUVL6UONK2C"
-// private default = "uSN4YjX+vSxe0KB/kNwqit/PlllcuvsnPh+F6E1B"
-
-//ami-02dfbd4ff395f2a1b
-//MyPair
-
 export type varsType = {
   name: string;
   ami: string;
@@ -12,13 +6,8 @@ export type varsType = {
   region: string;
   accessKey: string;
   privateKey: string;
-};
-
-const AMI_IDs = {
-  windows: 'ami-01a15dfc48279bf55',
-  amazonLinux: 'ami-01b14b7ad41e17ba4',
-  redHatLinux: 'ami-056244ee7f6e2feb8',
-  ubuntu: 'ami-0ec10929233384c7f',
+  userPrompt?: string;
+  sgName: string;
 };
 
 export const getVariables = (vars: varsType) => {

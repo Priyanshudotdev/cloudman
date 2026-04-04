@@ -7,6 +7,26 @@ import cors from 'cors';
 
 const app = express();
 
+export type AIResponseType = {
+  message: string;
+  fileContent: {
+    status: string;
+    analytics: {
+      app_type: string;
+      traffic_level: string;
+      instance_type: string;
+      region: string;
+    };
+    main_tf: string;
+    variables_tf: string;
+    provider_tf: string;
+    output_tf: string;
+    estimated_cost: string;
+    risk_level: string;
+    notes: string;
+  };
+};
+
 // CORS middleware with explicit headers
 app.use(cors({ origin: '*' }));
 
@@ -29,10 +49,25 @@ app.post('/generate', async (req, res) => {
   }
 
   try {
-    const response = await generateFiles(vars);
+    const data = await fetch('http://localhost:8081/ai/iac', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userPrompt:
+          vars.userPrompt ||
+          'Deploy my React app on AWS EC2 with low cost. It is a small project with around 100 daily users.',
+      }),
+    });
+
+    const aiResponse = (await data.json()) as AIResponseType;
+
+    const response = await generateFiles(vars, aiResponse);
     res.status(200).json({
       message: 'Ok',
       response,
+      aiResponse,
     });
   } catch (error) {
     res.status(500).json({
