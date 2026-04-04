@@ -40,6 +40,8 @@ export const initTofu = async (projectName: string) => {
     let output = '';
     let error = '';
 
+    console.log('\n\n', targetFolder, '\n\n');
+
     const child = spawn('tofu', ['init'], {
       cwd: targetFolder,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -48,11 +50,13 @@ export const initTofu = async (projectName: string) => {
     if (child.stdout) {
       child.stdout.on('data', (data) => {
         output += data.toString();
+        console.log(output);
       });
     }
     if (child.stderr) {
       child.stderr.on('data', (data) => {
         error += data.toString();
+        console.log(error);
       });
     }
 
