@@ -235,7 +235,7 @@ resource "aws_instance" "{{NAME}}" {
       {{BUILD_COMMAND}}
     fi
     npm install -g serve
-    nohup serve {{OUTPUT_DIR}} -l 80 &
+    nohup serve {{OUTPUT_DIR}} -l 80 > /var/log/cloudman-serve.log 2>&1 &
   EOF
 
   tags = {

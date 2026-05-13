@@ -236,7 +236,8 @@ const checkHealth = async (url: string | null) => {
     return { healthy: false, checks: 0, reason: 'missing_url' };
   }
 
-  const maxChecks = 12;
+  const maxChecks = Number(process.env.HEALTH_MAX_CHECKS || 12);
+  const checkDelayMs = Number(process.env.HEALTH_CHECK_DELAY_MS || 10_000);
   for (let attempt = 1; attempt <= maxChecks; attempt++) {
     try {
       const response = await fetch(url);
@@ -247,7 +248,7 @@ const checkHealth = async (url: string | null) => {
       // Keep retrying
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 10_000));
+    await new Promise((resolve) => setTimeout(resolve, checkDelayMs));
   }
 
   return { healthy: false, checks: maxChecks, reason: 'timeout' };
