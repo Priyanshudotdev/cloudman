@@ -10,3 +10,5 @@ iac-projects/
 .terraform/
 
 something.md
+*.tfvars
+*.tfvars.json

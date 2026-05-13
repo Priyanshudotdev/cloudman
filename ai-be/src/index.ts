@@ -2,7 +2,11 @@ import { config } from 'dotenv';
 config();
 import express from 'express';
 import cors from 'cors';
-import { fetchIaCFileContents } from './genai';
+import {
+  analyzeRepositoryContext,
+  fetchIaCFileContents,
+  generateDeploymentPlan,
+} from './genai';
 
 const app = express();
 
@@ -25,6 +29,39 @@ app.post('/ai/iac', async (req, res) => {
     message: 'success',
     fileContent,
   });
+});
+
+app.post('/ai/analyze', async (req, res) => {
+  const { repoUrl, repoContext } = req.body;
+
+  if (!repoUrl || !repoContext) {
+    return res.status(400).json({
+      message: 'error',
+      error: '"repoUrl" and "repoContext" are required.',
+    });
+  }
+
+  const analysis = await analyzeRepositoryContext({
+    ...repoContext,
+    repoUrl,
+  });
+
+  return res.status(200).json(analysis);
+});
+
+app.post('/ai/plan', async (req, res) => {
+  const { repoAnalysis, userMeta } = req.body;
+
+  if (!repoAnalysis || !userMeta) {
+    return res.status(400).json({
+      message: 'error',
+      error: '"repoAnalysis" and "userMeta" are required.',
+    });
+  }
+
+  const plan = await generateDeploymentPlan(repoAnalysis, userMeta);
+
+  return res.status(200).json(plan);
 });
 
 app.listen(process.env.PORT, () => {

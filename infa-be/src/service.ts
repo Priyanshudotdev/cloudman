@@ -1,10 +1,51 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
-import { getVariables, varsType } from './content';
+import { varsType } from './content';
 import { AIResponseType } from '.';
 
 const iacDir = path.join(__dirname, 'iac');
+
+const getTargetFolder = (projectName: string) => {
+  if (!/^[a-zA-Z0-9_-]+$/.test(projectName)) {
+    throw new Error(
+      'Invalid project name. Use only letters, numbers, hyphens, and underscores.',
+    );
+  }
+
+  const targetFolder = path.resolve(iacDir, projectName);
+  const rootFolder = `${path.resolve(iacDir)}${path.sep}`;
+  if (!targetFolder.startsWith(rootFolder)) {
+    throw new Error('Invalid project path.');
+  }
+
+  return targetFolder;
+};
+
+const assertSafeValue = (value: string, regex: RegExp, label: string) => {
+  if (!regex.test(value)) {
+    throw new Error(`Invalid ${label} for security reasons.`);
+  }
+};
+
+const validateDeployVars = (vars: varsType) => {
+  assertSafeValue(
+    vars.githubRepoUrl,
+    /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
+    'githubRepoUrl',
+  );
+  const allowedBuildCommands = new Set([
+    'none',
+    'npm run build',
+    'npm install && npm run build',
+  ]);
+  if (!allowedBuildCommands.has(vars.buildCommand.trim())) {
+    throw new Error('Invalid buildCommand for security reasons.');
+  }
+
+  assertSafeValue(vars.outputDir, /^(\.|[A-Za-z0-9._-]+)$/, 'outputDir');
+  assertSafeValue(vars.nodeVersion, /^[0-9]{1,2}$/, 'nodeVersion');
+};
 
 export const parseFiles = (
   { fileContent }: AIResponseType,
@@ -15,46 +56,26 @@ export const parseFiles = (
   output: string;
   provider: string;
 } => {
+  const replacePlaceholders = (value: string) =>
+    value
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName)
+      .replace(/\{\{GITHUB_REPO_URL\}\}/g, vars.githubRepoUrl)
+      .replace(/\{\{BUILD_COMMAND\}\}/g, vars.buildCommand)
+      .replace(/\{\{OUTPUT_DIR\}\}/g, vars.outputDir)
+      .replace(/\{\{NODE_VERSION\}\}/g, vars.nodeVersion);
+
   return {
-    variables: fileContent.variables_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    main: fileContent.main_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    output: fileContent.output_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    provider: fileContent.provider_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+    variables: replacePlaceholders(fileContent.variables_tf),
+    main: replacePlaceholders(fileContent.main_tf),
+    output: replacePlaceholders(fileContent.output_tf),
+    provider: replacePlaceholders(fileContent.provider_tf),
   };
 };
 
@@ -62,11 +83,10 @@ export const generateFiles = async (
   vars: varsType,
   fileContent: AIResponseType,
 ) => {
+  validateDeployVars(vars);
   await fs.mkdir(iacDir, { recursive: true });
-  const targetDir = path.join(iacDir, vars.name);
+  const targetDir = getTargetFolder(vars.name);
   await fs.mkdir(targetDir, { recursive: true });
-
-  // const filesContent = await getVariables(vars);
 
   const parsedFiles = parseFiles(fileContent, vars);
 
@@ -89,7 +109,7 @@ export const generateFiles = async (
 };
 
 export const initTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -133,7 +153,7 @@ export const initTofu = async (projectName: string) => {
 };
 
 export const planTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -173,7 +193,7 @@ export const planTofu = async (projectName: string) => {
 };
 
 export const applyTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -211,6 +231,46 @@ export const applyTofu = async (projectName: string) => {
         }
         console.log('Outputs:', outputs);
         resolve({ success: true, output, outputs });
+      } else {
+        resolve({ success: false, error: error || `Exited with code ${code}` });
+      }
+    });
+
+    child.on('error', (err) => {
+      resolve({ success: false, error: err.message });
+    });
+  });
+};
+
+export const destroyTofu = async (projectName: string) => {
+  const targetFolder = getTargetFolder(projectName);
+  return await new Promise<{
+    success: boolean;
+    output?: string;
+    error?: string;
+  }>((resolve) => {
+    let output = '';
+    let error = '';
+
+    const child = spawn('tofu', ['destroy', '-auto-approve'], {
+      cwd: targetFolder,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (child.stdout) {
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+    }
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ success: true, output });
       } else {
         resolve({ success: false, error: error || `Exited with code ${code}` });
       }
