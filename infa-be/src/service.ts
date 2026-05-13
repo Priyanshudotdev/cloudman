@@ -34,12 +34,16 @@ const validateDeployVars = (vars: varsType) => {
     /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
     'githubRepoUrl',
   );
-  assertSafeValue(
-    vars.buildCommand,
-    /^(none|[A-Za-z0-9_./:@=+-]+(?:\s+[A-Za-z0-9_./:@=+-]+)*(?:\s*&&\s*[A-Za-z0-9_./:@=+-]+(?:\s+[A-Za-z0-9_./:@=+-]+)*)*)$/,
-    'buildCommand',
-  );
-  assertSafeValue(vars.outputDir, /^[A-Za-z0-9._/-]+$/, 'outputDir');
+  const allowedBuildCommands = new Set([
+    'none',
+    'npm run build',
+    'npm install && npm run build',
+  ]);
+  if (!allowedBuildCommands.has(vars.buildCommand.trim())) {
+    throw new Error('Invalid buildCommand for security reasons.');
+  }
+
+  assertSafeValue(vars.outputDir, /^(\.|[A-Za-z0-9._-]+)$/, 'outputDir');
   assertSafeValue(vars.nodeVersion, /^[0-9]{1,2}$/, 'nodeVersion');
 };
 

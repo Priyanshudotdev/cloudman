@@ -56,7 +56,9 @@ const generateJSONResponse = async (
   });
 
   if (res.text) {
-    const normalizedText = res.text.replace(/```json/i, '').replace(/```/i, '');
+    const normalizedText = res.text
+      .replace(/```json/gi, '')
+      .replace(/```/gi, '');
     try {
       return JSON.parse(normalizedText);
     } catch (parseError) {

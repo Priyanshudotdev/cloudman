@@ -131,7 +131,7 @@ app.post('/deploy', async (req, res) => {
 
     const rawIp = applyResult.outputs?.public_ip || '';
     const publicIp = rawIp.replace(/"/g, '').trim();
-    const url = publicIp ? `http://${publicIp}` : null;
+    const url = getValidatedHealthUrl(publicIp);
     const health = await checkHealth(url);
 
     res.write(
@@ -239,8 +239,10 @@ const checkHealth = async (url: string | null) => {
   const maxChecks = Number(process.env.HEALTH_MAX_CHECKS || 12);
   const checkDelayMs = Number(process.env.HEALTH_CHECK_DELAY_MS || 10_000);
   for (let attempt = 1; attempt <= maxChecks; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
       if (response.ok) {
         return { healthy: true, checks: attempt };
       }
@@ -249,10 +251,28 @@ const checkHealth = async (url: string | null) => {
         `Health check attempt ${attempt}/${maxChecks} failed for ${url}:`,
         error,
       );
+    } finally {
+      clearTimeout(timeout);
     }
 
-    await new Promise((resolve) => setTimeout(resolve, checkDelayMs));
+    if (attempt < maxChecks) {
+      await new Promise((resolve) => setTimeout(resolve, checkDelayMs));
+    }
   }
 
   return { healthy: false, checks: maxChecks, reason: 'timeout' };
+};
+
+const getValidatedHealthUrl = (publicIp: string) => {
+  if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(publicIp)) {
+    return null;
+  }
+
+  const url = `http://${publicIp}`;
+  const parsed = new URL(url);
+  if (parsed.protocol !== 'http:') {
+    return null;
+  }
+
+  return url;
 };
