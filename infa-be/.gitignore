@@ -8,3 +8,6 @@ iac-projects/
 *.tfstate
 *.tfstate.*
 .terraform/
+
+*.tfvars
+*.tfvars.json

@@ -1,29 +1,29 @@
 variable "region" {
   type    = string
-  default = "us-east-1"
+  default = "{{REGION}}"
 }
 
 variable "instance_type" {
   type    = string
-  default = "t3.micro"
+  default = "{{INSTANCE_TYPE}}"
 }
 
 variable "ami" {
   type    = string
-  default = "ami-02dfbd4ff395f2a1b"
+  default = "{{AMI_ID}}"
 }
 
 variable "key_name" {
   type    = string
-  default = "MyPair"
+  default = "{{KEY_NAME}}"
 }
 
 variable "access_key" {
   type    = string
-  default = "AKIAUXVWBKUVL6UONK2C"
+  default = "{{ACCESS_KEY}}"
 }
 
 variable "secret_key" {
   type    = string
-  default = "uSN4YjX+vSxe0KB/kNwqit/PlllcuvsnPh+F6E1B"
+  default = "{{SECRET_KEY}}"
 }

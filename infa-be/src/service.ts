@@ -1,7 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { spawn } from 'child_process';
-import { getVariables, varsType } from './content';
+import { varsType } from './content';
 import { AIResponseType } from '.';
 
 const iacDir = path.join(__dirname, 'iac');
@@ -15,46 +15,26 @@ export const parseFiles = (
   output: string;
   provider: string;
 } => {
+  const replacePlaceholders = (value: string) =>
+    value
+      .replace(/\{\{NAME\}\}/g, vars.name)
+      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
+      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
+      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
+      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
+      .replace(/\{\{REGION\}\}/g, vars.region)
+      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
+      .replace(/\{\{SG_NAME\}\}/g, vars.sgName)
+      .replace(/\{\{GITHUB_REPO_URL\}\}/g, vars.githubRepoUrl)
+      .replace(/\{\{BUILD_COMMAND\}\}/g, vars.buildCommand)
+      .replace(/\{\{OUTPUT_DIR\}\}/g, vars.outputDir)
+      .replace(/\{\{NODE_VERSION\}\}/g, vars.nodeVersion);
+
   return {
-    variables: fileContent.variables_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    main: fileContent.main_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    output: fileContent.output_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
-
-    provider: fileContent.provider_tf
-      .replace(/\{\{NAME\}\}/g, vars.name)
-      .replace(/\{\{ACCESS_KEY\}\}/g, vars.accessKey)
-      .replace(/\{\{SECRET_KEY\}\}/g, vars.privateKey)
-      .replace(/\{\{AMI_ID\}\}/g, vars.ami)
-      .replace(/\{\{INSTANCE_TYPE\}\}/g, vars.instanceType)
-      .replace(/\{\{REGION\}\}/g, vars.region)
-      .replace(/\{\{KEY_NAME\}\}/g, vars.keyName)
-      .replace(/\{\{SG_NAME\}\}/g, vars.sgName),
+    variables: replacePlaceholders(fileContent.variables_tf),
+    main: replacePlaceholders(fileContent.main_tf),
+    output: replacePlaceholders(fileContent.output_tf),
+    provider: replacePlaceholders(fileContent.provider_tf),
   };
 };
 
@@ -65,8 +45,6 @@ export const generateFiles = async (
   await fs.mkdir(iacDir, { recursive: true });
   const targetDir = path.join(iacDir, vars.name);
   await fs.mkdir(targetDir, { recursive: true });
-
-  // const filesContent = await getVariables(vars);
 
   const parsedFiles = parseFiles(fileContent, vars);
 
@@ -211,6 +189,46 @@ export const applyTofu = async (projectName: string) => {
         }
         console.log('Outputs:', outputs);
         resolve({ success: true, output, outputs });
+      } else {
+        resolve({ success: false, error: error || `Exited with code ${code}` });
+      }
+    });
+
+    child.on('error', (err) => {
+      resolve({ success: false, error: err.message });
+    });
+  });
+};
+
+export const destroyTofu = async (projectName: string) => {
+  const targetFolder = path.join(iacDir, projectName);
+  return await new Promise<{
+    success: boolean;
+    output?: string;
+    error?: string;
+  }>((resolve) => {
+    let output = '';
+    let error = '';
+
+    const child = spawn('tofu', ['destroy', '-auto-approve'], {
+      cwd: targetFolder,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    if (child.stdout) {
+      child.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (data) => {
+        error += data.toString();
+      });
+    }
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve({ success: true, output });
       } else {
         resolve({ success: false, error: error || `Exited with code ${code}` });
       }
