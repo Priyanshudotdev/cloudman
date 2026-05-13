@@ -244,8 +244,8 @@ const checkHealth = async (url: string | null) => {
       if (response.ok) {
         return { healthy: true, checks: attempt };
       }
-    } catch {
-      // Keep retrying
+    } catch (error) {
+      console.error('Health check attempt failed:', error);
     }
 
     await new Promise((resolve) => setTimeout(resolve, checkDelayMs));

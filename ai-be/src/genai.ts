@@ -60,7 +60,9 @@ const generateJSONResponse = async (
     try {
       return JSON.parse(normalizedText);
     } catch {
-      throw new Error(`Failed to parse AI response as JSON: ${normalizedText}`);
+      throw new Error(
+        `Failed to parse AI response as JSON: ${normalizedText.slice(0, 240)}`,
+      );
     }
   }
 
