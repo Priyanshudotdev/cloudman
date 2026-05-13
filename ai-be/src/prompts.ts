@@ -230,12 +230,11 @@ resource "aws_instance" "{{NAME}}" {
     yum install -y nodejs git
     cd /home/ec2-user
     git clone {{GITHUB_REPO_URL}} app
-    cd app
-    if [ "{{BUILD_COMMAND}}" != "none" ]; then
-      {{BUILD_COMMAND}}
+    if [ "$(echo "{{BUILD_COMMAND}}" | tr "[:upper:]" "[:lower:]")" != "none" ]; then
+      su - ec2-user -c "cd /home/ec2-user/app && {{BUILD_COMMAND}}"
     fi
     npm install -g serve
-    nohup serve {{OUTPUT_DIR}} -l 80 > /var/log/cloudman-serve.log 2>&1 &
+    nohup su - ec2-user -c "cd /home/ec2-user/app && serve {{OUTPUT_DIR}} -l 80" > /var/log/cloudman-serve.log 2>&1 &
   EOF
 
   tags = {

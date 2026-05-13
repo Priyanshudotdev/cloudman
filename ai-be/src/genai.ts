@@ -59,9 +59,9 @@ const generateJSONResponse = async (
     const normalizedText = res.text.replace(/```json/i, '').replace(/```/i, '');
     try {
       return JSON.parse(normalizedText);
-    } catch {
+    } catch (parseError) {
       throw new Error(
-        `Failed to parse AI response as JSON: ${normalizedText.slice(0, 240)}`,
+        `Failed to parse AI response as JSON: ${(parseError as Error).message}. Response: ${normalizedText.slice(0, 240)}`,
       );
     }
   }

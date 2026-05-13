@@ -22,6 +22,27 @@ const getTargetFolder = (projectName: string) => {
   return targetFolder;
 };
 
+const assertSafeValue = (value: string, regex: RegExp, label: string) => {
+  if (!regex.test(value)) {
+    throw new Error(`Invalid ${label} for security reasons.`);
+  }
+};
+
+const validateDeployVars = (vars: varsType) => {
+  assertSafeValue(
+    vars.githubRepoUrl,
+    /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
+    'githubRepoUrl',
+  );
+  assertSafeValue(
+    vars.buildCommand,
+    /^(none|[A-Za-z0-9_./:@=+-]+(?:\s+[A-Za-z0-9_./:@=+-]+)*(?:\s*&&\s*[A-Za-z0-9_./:@=+-]+(?:\s+[A-Za-z0-9_./:@=+-]+)*)*)$/,
+    'buildCommand',
+  );
+  assertSafeValue(vars.outputDir, /^[A-Za-z0-9._/-]+$/, 'outputDir');
+  assertSafeValue(vars.nodeVersion, /^[0-9]{1,2}$/, 'nodeVersion');
+};
+
 export const parseFiles = (
   { fileContent }: AIResponseType,
   vars: varsType,
@@ -58,6 +79,7 @@ export const generateFiles = async (
   vars: varsType,
   fileContent: AIResponseType,
 ) => {
+  validateDeployVars(vars);
   await fs.mkdir(iacDir, { recursive: true });
   const targetDir = getTargetFolder(vars.name);
   await fs.mkdir(targetDir, { recursive: true });

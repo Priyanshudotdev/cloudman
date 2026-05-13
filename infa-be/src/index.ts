@@ -245,7 +245,10 @@ const checkHealth = async (url: string | null) => {
         return { healthy: true, checks: attempt };
       }
     } catch (error) {
-      console.error('Health check attempt failed:', error);
+      console.error(
+        `Health check attempt ${attempt}/${maxChecks} failed for ${url}:`,
+        error,
+      );
     }
 
     await new Promise((resolve) => setTimeout(resolve, checkDelayMs));
