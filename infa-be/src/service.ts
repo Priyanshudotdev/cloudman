@@ -6,6 +6,22 @@ import { AIResponseType } from '.';
 
 const iacDir = path.join(__dirname, 'iac');
 
+const getTargetFolder = (projectName: string) => {
+  if (!/^[a-zA-Z0-9_-]+$/.test(projectName)) {
+    throw new Error(
+      'Invalid project name. Use only letters, numbers, hyphens, and underscores.',
+    );
+  }
+
+  const targetFolder = path.resolve(iacDir, projectName);
+  const rootFolder = `${path.resolve(iacDir)}${path.sep}`;
+  if (!targetFolder.startsWith(rootFolder)) {
+    throw new Error('Invalid project path.');
+  }
+
+  return targetFolder;
+};
+
 export const parseFiles = (
   { fileContent }: AIResponseType,
   vars: varsType,
@@ -43,7 +59,7 @@ export const generateFiles = async (
   fileContent: AIResponseType,
 ) => {
   await fs.mkdir(iacDir, { recursive: true });
-  const targetDir = path.join(iacDir, vars.name);
+  const targetDir = getTargetFolder(vars.name);
   await fs.mkdir(targetDir, { recursive: true });
 
   const parsedFiles = parseFiles(fileContent, vars);
@@ -67,7 +83,7 @@ export const generateFiles = async (
 };
 
 export const initTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -111,7 +127,7 @@ export const initTofu = async (projectName: string) => {
 };
 
 export const planTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -151,7 +167,7 @@ export const planTofu = async (projectName: string) => {
 };
 
 export const applyTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;
@@ -201,7 +217,7 @@ export const applyTofu = async (projectName: string) => {
 };
 
 export const destroyTofu = async (projectName: string) => {
-  const targetFolder = path.join(iacDir, projectName);
+  const targetFolder = getTargetFolder(projectName);
   return await new Promise<{
     success: boolean;
     output?: string;

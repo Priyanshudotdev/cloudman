@@ -56,7 +56,12 @@ const generateJSONResponse = async (
   });
 
   if (res.text) {
-    return JSON.parse(res.text.replace(/```json/i, '').replace(/```/i, ''));
+    const normalizedText = res.text.replace(/```json/i, '').replace(/```/i, '');
+    try {
+      return JSON.parse(normalizedText);
+    } catch {
+      throw new Error(`Failed to parse AI response as JSON: ${normalizedText}`);
+    }
   }
 
   return null;

@@ -225,7 +225,8 @@ resource "aws_instance" "{{NAME}}" {
     #!/bin/bash
     set -e
     yum update -y
-    curl -fsSL https://rpm.nodesource.com/setup_{{NODE_VERSION}}.x | bash -
+    curl -fsSL https://rpm.nodesource.com/setup_{{NODE_VERSION}}.x -o /tmp/nodesource-setup.sh
+    bash /tmp/nodesource-setup.sh
     yum install -y nodejs git
     cd /home/ec2-user
     git clone {{GITHUB_REPO_URL}} app
