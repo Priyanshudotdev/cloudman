@@ -31,11 +31,7 @@ const assertSafeValue = (value: string, regex: RegExp, label: string) => {
 };
 
 const validateDeployVars = (vars: varsType) => {
-  assertSafeValue(
-    vars.githubRepoUrl,
-    /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
-    'githubRepoUrl',
-  );
+  validateTemplateVars(vars);
   if (
     vars.projectType !== 'react-vite' &&
     vars.projectType !== 'react-cra' &&
@@ -43,12 +39,22 @@ const validateDeployVars = (vars: varsType) => {
   ) {
     throw new Error('Invalid projectType for security reasons.');
   }
+  assertSafeValue(
+    path.basename(vars.pemKeyPath),
+    /^[A-Za-z0-9._-]+\.pem$/,
+    'pemKeyPath',
+  );
+};
 
+const validateTemplateVars = (vars: varsType) => {
+  assertSafeValue(
+    vars.githubRepoUrl,
+    /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
+    'githubRepoUrl',
+  );
   if (vars.nodeVersion && vars.nodeVersion !== '18' && vars.nodeVersion !== '20') {
     throw new Error('Invalid nodeVersion for security reasons.');
   }
-
-  assertSafeValue(vars.pemKeyPath, /^[^\r\n]+$/, 'pemKeyPath');
 };
 
 export const parseFiles = (
@@ -85,6 +91,7 @@ export const generateFiles = async (
   vars: varsType,
   fileContent: AIResponseType,
 ) => {
+  validateTemplateVars(vars);
   await fs.mkdir(iacDir, { recursive: true });
   const targetDir = getTargetFolder(vars.name);
   await fs.mkdir(targetDir, { recursive: true });
@@ -251,11 +258,14 @@ export type SshDeployLog = {
 };
 
 const resolvePemKeyPath = (pemKeyPath: string) => {
-  if (path.isAbsolute(pemKeyPath)) {
-    return pemKeyPath;
+  const keysDir = path.resolve(__dirname, 'keys');
+  const fileName = path.basename(pemKeyPath);
+  assertSafeValue(fileName, /^[A-Za-z0-9._-]+\.pem$/, 'pemKeyPath');
+  const resolved = path.resolve(keysDir, fileName);
+  if (!resolved.startsWith(`${keysDir}${path.sep}`)) {
+    throw new Error('Invalid pemKeyPath for security reasons.');
   }
-
-  return path.resolve(__dirname, 'keys', path.basename(pemKeyPath));
+  return resolved;
 };
 
 export const sshDeploy = async (
@@ -277,7 +287,13 @@ export const sshDeploy = async (
   if (process.platform !== 'win32') {
     try {
       chmodSync(pemPath, 0o400);
-    } catch {}
+    } catch (error) {
+      // Best-effort only: some environments/filesystems may not allow chmod here.
+      onLog({
+        step: 'connecting',
+        message: `Warning: could not set PEM permission to 400 (${(error as Error).message})`,
+      });
+    }
   }
 
   onLog({
@@ -307,7 +323,7 @@ export const sshDeploy = async (
   }
 
   if (!connected) {
-    return { success: false, error: 'Could not connect via SSH after 3 minutes' };
+    return { success: false, error: 'Could not connect via SSH after 18 attempts (~3 minutes)' };
   }
 
   const run = async (
@@ -331,35 +347,46 @@ export const sshDeploy = async (
   };
 
   try {
+    const nodeVersion = vars.nodeVersion || '18';
     onLog({
       step: 'installing_node',
-      message: 'Detecting OS and installing Node.js 18...',
+      message: `Detecting OS and installing Node.js ${nodeVersion}...`,
     });
     const osCheck = await run('installing_node', 'cat /etc/os-release');
     const isAL2023 =
       osCheck.stdout.includes('Amazon Linux 2023') ||
       osCheck.stdout.includes('VERSION_ID="2023"');
-    const nodeVersion = vars.nodeVersion || '18';
 
     if (isAL2023) {
       if (nodeVersion === '20') {
-        await run(
-          'installing_node',
-          'sudo dnf install -y nodejs20 git || sudo dnf install -y nodejs git',
-        );
+        const installResult = await run('installing_node', 'sudo dnf install -y nodejs20 git');
+        if (installResult.code !== 0) {
+          throw new Error(`Node.js 20 installation failed: ${installResult.stderr}`);
+        }
       } else {
-        await run('installing_node', 'sudo dnf install -y nodejs git');
+        const installResult = await run('installing_node', 'sudo dnf install -y nodejs git');
+        if (installResult.code !== 0) {
+          throw new Error(`Node.js installation failed: ${installResult.stderr}`);
+        }
       }
     } else {
       if (nodeVersion === '20') {
-        await run(
-          'installing_node',
-          'sudo amazon-linux-extras install nodejs20 -y || sudo amazon-linux-extras install nodejs18 -y',
+        throw new Error(
+          'Node.js 20 is not supported via amazon-linux-extras on Amazon Linux 2. Use nodeVersion "18" for Amazon Linux 2.',
         );
       } else {
-        await run('installing_node', 'sudo amazon-linux-extras install nodejs18 -y');
+        const installResult = await run(
+          'installing_node',
+          'sudo amazon-linux-extras enable nodejs18 && sudo yum clean metadata && sudo yum install -y nodejs',
+        );
+        if (installResult.code !== 0) {
+          throw new Error(`Node.js installation failed: ${installResult.stderr}`);
+        }
       }
-      await run('installing_node', 'sudo yum install -y git');
+      const gitInstallResult = await run('installing_node', 'sudo yum install -y git');
+      if (gitInstallResult.code !== 0) {
+        throw new Error(`Git installation failed: ${gitInstallResult.stderr}`);
+      }
     }
 
     const nodeCheck = await run('installing_node', 'node -v');
@@ -450,12 +477,17 @@ export const sshDeploy = async (
       message: `Starting serve on port 80 from ${serveDir}/...`,
     });
     await run('serving', 'sudo fuser -k 80/tcp || true');
-    const serveCmd = `nohup sudo serve ${serveDir} -l 80 > /var/log/cloudman-serve.log 2>&1 &`;
+    const serveCmdMap = {
+      'react-vite': 'nohup sudo serve dist -l 80 > /var/log/cloudman-serve.log 2>&1 &',
+      'react-cra': 'nohup sudo serve build -l 80 > /var/log/cloudman-serve.log 2>&1 &',
+      'static-html': 'nohup sudo serve . -l 80 > /var/log/cloudman-serve.log 2>&1 &',
+    } as const;
+    const serveCmd = serveCmdMap[vars.projectType];
     await ssh.execCommand(serveCmd, { cwd: '/home/ec2-user/app' });
 
     await new Promise((r) => setTimeout(r, 5000));
     const checkServe = await run('serving', 'ps aux | grep serve | grep -v grep');
-    if (!checkServe.stdout.includes('serve')) {
+    if (checkServe.code !== 0 || !checkServe.stdout.includes('serve')) {
       const serveLog = await run('serving', 'cat /var/log/cloudman-serve.log');
       throw new Error(`serve process not running. Log: ${serveLog.stdout}`);
     }

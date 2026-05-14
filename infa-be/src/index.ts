@@ -155,7 +155,11 @@ app.post('/deploy', async (req, res) => {
     });
 
     if (!deployResult.success) {
-      send({ step: 'error', message: deployResult.error });
+      send({
+        step: 'error',
+        message: deployResult.error || 'SSH deployment failed',
+      });
+      return res.end();
     }
   } catch (error) {
     send({ step: 'error', message: (error as Error).message });
