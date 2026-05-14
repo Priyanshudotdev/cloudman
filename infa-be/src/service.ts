@@ -30,32 +30,38 @@ const assertSafeValue = (value: string, regex: RegExp, label: string) => {
   }
 };
 
+const getProjectDefaults = (vars: varsType) => {
+  const buildCommand =
+    vars.buildCommand ?? (vars.projectType === 'static-html' ? 'none' : 'npm run build');
+  const outputDir =
+    vars.outputDir ??
+    (vars.projectType === 'react-vite'
+      ? 'dist'
+      : vars.projectType === 'react-cra'
+      ? 'build'
+      : '.');
+  const nodeVersion = vars.nodeVersion ?? '18';
+
+  return { buildCommand, outputDir, nodeVersion };
+};
+
 const validateDeployVars = (vars: varsType) => {
   assertSafeValue(
     vars.githubRepoUrl,
     /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/,
     'githubRepoUrl',
   );
-  const fallbackBuildCommand =
-    vars.projectType === 'static-html' ? 'none' : 'npm run build';
-  const buildCommand = (vars.buildCommand ?? fallbackBuildCommand).trim();
+  const { buildCommand, outputDir, nodeVersion } = getProjectDefaults(vars);
+  const normalizedBuildCommand = buildCommand.trim();
   const allowedBuildCommands = new Set([
     'none',
     'npm run build',
     'npm install && npm run build',
   ]);
-  if (!allowedBuildCommands.has(buildCommand)) {
+  if (!allowedBuildCommands.has(normalizedBuildCommand)) {
     throw new Error('Invalid buildCommand for security reasons.');
   }
-  const fallbackOutputDir =
-    vars.projectType === 'react-vite'
-      ? 'dist'
-      : vars.projectType === 'react-cra'
-      ? 'build'
-      : '.';
-  const outputDir = vars.outputDir ?? fallbackOutputDir;
   assertSafeValue(outputDir, /^(\.|[A-Za-z0-9._-]+)$/, 'outputDir');
-  const nodeVersion = vars.nodeVersion ?? '18';
   assertSafeValue(nodeVersion, /^(18|20)$/, 'nodeVersion');
 };
 
@@ -69,17 +75,7 @@ export const parseFiles = (
   provider: string;
 } => {
   const replacePlaceholders = (value: string) => {
-    const fallbackBuildCommand =
-      vars.projectType === 'static-html' ? 'none' : 'npm run build';
-    const fallbackOutputDir =
-      vars.projectType === 'react-vite'
-        ? 'dist'
-        : vars.projectType === 'react-cra'
-        ? 'build'
-        : '.';
-    const buildCommand = vars.buildCommand ?? fallbackBuildCommand;
-    const outputDir = vars.outputDir ?? fallbackOutputDir;
-    const nodeVersion = vars.nodeVersion ?? '18';
+    const { buildCommand, outputDir, nodeVersion } = getProjectDefaults(vars);
 
     return value
       .replace(/\{\{NAME\}\}/g, vars.name)
@@ -291,7 +287,12 @@ export const sshDeploy = async (
   if (process.platform !== 'win32') {
     try {
       chmodSync(pemKeyPath, 0o400);
-    } catch {}
+    } catch (error) {
+      onLog({
+        step: 'connecting',
+        message: `Warning: unable to update key file permissions: ${(error as Error).message}`,
+      });
+    }
   }
 
   onLog({
@@ -323,7 +324,7 @@ export const sshDeploy = async (
   if (!connected) {
     return {
       success: false,
-      error: 'Could not connect via SSH after 3 minutes',
+      error: 'Could not connect via SSH after approximately 3 minutes',
     };
   }
 
@@ -357,8 +358,11 @@ export const sshDeploy = async (
     if (isAL2023) {
       await run('installing_node', 'sudo dnf install -y nodejs git');
     } else {
-      const nodeChannel =
-        desiredNodeVersion === '20' ? 'nodejs20' : 'nodejs18';
+      const al2NodeChannels: Record<'18' | '20', string> = {
+        '18': 'nodejs18',
+        '20': 'nodejs20',
+      };
+      const nodeChannel = al2NodeChannels[desiredNodeVersion];
       await run(
         'installing_node',
         `sudo amazon-linux-extras install ${nodeChannel} -y`,
@@ -452,6 +456,7 @@ export const sshDeploy = async (
       step: 'serving',
       message: `Starting serve on port 80 from ${serveDir}/...`,
     });
+    assertSafeValue(serveDir, /^(\.|[A-Za-z0-9._-]+)$/, 'serveDir');
     await run('serving', 'sudo fuser -k 80/tcp || true');
     const serveCmd = `nohup sudo serve ${serveDir} -l 80 > /var/log/cloudman-serve.log 2>&1 &`;
     await ssh.execCommand(serveCmd, { cwd: '/home/ec2-user/app' });
@@ -460,7 +465,8 @@ export const sshDeploy = async (
     const checkServe = await run('serving', 'ps aux | grep serve | grep -v grep');
     if (!checkServe.stdout.includes('serve')) {
       const serveLog = await run('serving', 'cat /var/log/cloudman-serve.log');
-      throw new Error(`serve process not running. Log: ${serveLog.stdout}`);
+      const logMessage = serveLog.stdout || serveLog.stderr || 'No serve log output found';
+      throw new Error(`serve process not running. Log: ${logMessage}`);
     }
     onLog({ step: 'serving', message: 'serve is running on port 80' });
 
