@@ -8,6 +8,7 @@ import {
   generateFiles,
   initTofu,
   planTofu,
+  sshDeploy,
 } from './service';
 import cors from 'cors';
 
@@ -88,70 +89,79 @@ app.post('/generate', async (req, res) => {
 });
 
 app.post('/deploy', async (req, res) => {
-  const vars = req.body.vars as varsType;
-  const aiResponse = req.body.aiResponse as AIResponseType | undefined;
-
-  if (!vars || !aiResponse) {
-    return res.status(400).json({
-      error: 'Missing required "vars" or "aiResponse" field in request body.',
-      success: false,
-    });
-  }
-
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+
+  const vars = req.body.vars as varsType;
+  const aiResponse = req.body.aiResponse as AIResponseType;
+
+  if (!vars || !aiResponse) {
+    res.write(
+      `data: ${JSON.stringify({ step: 'error', message: 'Missing vars or aiResponse' })}\n\n`,
+    );
+    return res.end();
+  }
+
+  const send = (data: object) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
 
   try {
-    const generationResult = await generateFiles(vars, aiResponse);
-    res.write(
-      `data: ${JSON.stringify({
-        step: 'files_generated',
-        ...generationResult,
-      })}\n\n`,
-    );
+    send({ step: 'files_generated', message: 'Writing Terraform files...' });
+    await generateFiles(vars, aiResponse);
+    send({
+      step: 'files_generated',
+      message: 'Terraform files written',
+      success: true,
+    });
 
+    send({ step: 'init', message: 'Running tofu init...' });
     const initResult = await initTofu(vars.name);
-    res.write(`data: ${JSON.stringify({ step: 'init', ...initResult })}\n\n`);
+    send({ step: 'init', ...initResult });
     if (!initResult.success) {
       return res.end();
     }
 
+    send({ step: 'plan', message: 'Running tofu plan...' });
     const planResult = await planTofu(vars.name);
-    res.write(`data: ${JSON.stringify({ step: 'plan', ...planResult })}\n\n`);
+    send({ step: 'plan', ...planResult });
     if (!planResult.success) {
       return res.end();
     }
 
+    send({
+      step: 'apply',
+      message: 'Running tofu apply (this takes ~45 seconds)...',
+    });
     const applyResult = await applyTofu(vars.name);
-    res.write(`data: ${JSON.stringify({ step: 'apply', ...applyResult })}\n\n`);
+    send({ step: 'apply', ...applyResult });
     if (!applyResult.success) {
       return res.end();
     }
 
-    const rawIp = applyResult.outputs?.public_ip || '';
-    const publicIp = rawIp.replace(/"/g, '').trim();
-    const url = getValidatedHealthUrl(publicIp);
-    const health = await checkHealth(url);
+    const publicIp = applyResult.outputs?.public_ip?.replace(/"/g, '').trim();
+    if (!publicIp) {
+      send({ step: 'error', message: 'No public IP returned from apply' });
+      return res.end();
+    }
+    send({ step: 'apply', message: `EC2 instance created. Public IP: ${publicIp}` });
+    send({ step: 'ssh_deploy', message: 'Starting SSH deployment...' });
 
-    res.write(
-      `data: ${JSON.stringify({
-        step: 'done',
-        publicIp,
-        url,
-        health,
-      })}\n\n`,
-    );
-    res.end();
+    const deployResult = await sshDeploy(publicIp, vars, (log) => {
+      send(log);
+    });
+
+    if (!deployResult.success) {
+      send({ step: 'error', message: deployResult.error });
+    }
   } catch (error) {
-    res.write(
-      `data: ${JSON.stringify({
-        step: 'error',
-        error: (error as Error).message || 'Internal server error',
-      })}\n\n`,
-    );
-    res.end();
+    send({ step: 'error', message: (error as Error).message });
   }
+
+  res.end();
 });
 
 app.post('/init', async (req, res) => {
@@ -230,49 +240,3 @@ app.post('/destroy', async (req, res) => {
 app.listen(process.env.PORT, () => {
   console.log('Server is listening on port ' + process.env.PORT);
 });
-
-const checkHealth = async (url: string | null) => {
-  if (!url) {
-    return { healthy: false, checks: 0, reason: 'missing_url' };
-  }
-
-  const maxChecks = Number(process.env.HEALTH_MAX_CHECKS || 12);
-  const checkDelayMs = Number(process.env.HEALTH_CHECK_DELAY_MS || 10_000);
-  for (let attempt = 1; attempt <= maxChecks; attempt++) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5_000);
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      if (response.ok) {
-        return { healthy: true, checks: attempt };
-      }
-    } catch (error) {
-      console.error(
-        `Health check attempt ${attempt}/${maxChecks} failed for ${url}:`,
-        error,
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    if (attempt < maxChecks) {
-      await new Promise((resolve) => setTimeout(resolve, checkDelayMs));
-    }
-  }
-
-  return { healthy: false, checks: maxChecks, reason: 'timeout' };
-};
-
-const getValidatedHealthUrl = (publicIp: string) => {
-  if (!/^(?:\d{1,3}\.){3}\d{1,3}$/.test(publicIp)) {
-    return null;
-  }
-
-  const url = `http://${publicIp}`;
-  const parsed = new URL(url);
-  if (parsed.protocol !== 'http:') {
-    return null;
-  }
-
-  return url;
-};
