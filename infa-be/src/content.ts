@@ -8,8 +8,10 @@ export type varsType = {
   privateKey: string;
   sgName: string;
   userPrompt?: string;
+  pemKeyPath: string;
   githubRepoUrl: string;
-  buildCommand: string;
-  outputDir: string;
-  nodeVersion: string;
+  projectType: 'react-vite' | 'react-cra' | 'static-html';
+  nodeVersion?: '18' | '20';
+  buildCommand?: string;
+  outputDir?: string;
 };

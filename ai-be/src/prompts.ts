@@ -178,9 +178,9 @@ You MUST generate:
 - Instance MUST:
   - use that security group
   - use variables
-- Include destroy provisioner
 
 NO extra resources allowed.
+NO user_data block. EVER.
 
 --------------------------------------------------
 
@@ -220,22 +220,6 @@ resource "aws_instance" "{{NAME}}" {
   key_name      = var.key_name
 
   vpc_security_group_ids = [aws_security_group.{{SG_NAME}}.id]
-
-  user_data = <<-EOF
-    #!/bin/bash
-    set -e
-    yum update -y
-    curl -fsSL https://rpm.nodesource.com/setup_{{NODE_VERSION}}.x -o /tmp/nodesource-setup.sh
-    bash /tmp/nodesource-setup.sh
-    yum install -y nodejs git
-    cd /home/ec2-user
-    git clone {{GITHUB_REPO_URL}} app
-    if [ "$(echo "{{BUILD_COMMAND}}" | tr "[:upper:]" "[:lower:]")" != "none" ]; then
-      su - ec2-user -c "cd /home/ec2-user/app && {{BUILD_COMMAND}}"
-    fi
-    npm install -g serve
-    nohup su - ec2-user -c "cd /home/ec2-user/app && serve {{OUTPUT_DIR}} -l 80" > /var/log/cloudman-serve.log 2>&1 &
-  EOF
 
   tags = {
     Name = "{{NAME}}"
