@@ -276,6 +276,8 @@ export const sshDeploy = async (
   onLog: (log: SshDeployLog) => void,
 ): Promise<{ success: boolean; url?: string; error?: string }> => {
   const ssh = new NodeSSH();
+  const maxAttempts = 18;
+  const retryDelayMs = 10_000;
   const keyName = path.basename(vars.pemKeyPath);
   const keyFromKeysDir = path.resolve(__dirname, 'keys', keyName);
   const pemKeyPath = existsSync(keyFromKeysDir)
@@ -283,6 +285,12 @@ export const sshDeploy = async (
     : path.isAbsolute(vars.pemKeyPath)
     ? vars.pemKeyPath
     : keyFromKeysDir;
+  if (!existsSync(pemKeyPath)) {
+    return {
+      success: false,
+      error: `PEM key file not found: ${pemKeyPath}`,
+    };
+  }
 
   if (process.platform !== 'win32') {
     try {
@@ -301,7 +309,7 @@ export const sshDeploy = async (
   });
 
   let connected = false;
-  for (let attempt = 1; attempt <= 18; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await ssh.connect({
         host: publicIp,
@@ -315,16 +323,17 @@ export const sshDeploy = async (
     } catch (_err) {
       onLog({
         step: 'connecting',
-        message: `Attempt ${attempt}/18 failed, retrying in 10s...`,
+        message: `Attempt ${attempt}/${maxAttempts} failed, retrying in 10s...`,
       });
-      await new Promise((resolve) => setTimeout(resolve, 10_000));
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
     }
   }
 
   if (!connected) {
+    const timeoutSeconds = Math.ceil((maxAttempts * retryDelayMs) / 1000);
     return {
       success: false,
-      error: 'Could not connect via SSH after approximately 3 minutes',
+      error: `Could not connect via SSH after approximately ${timeoutSeconds} seconds`,
     };
   }
 
@@ -344,7 +353,7 @@ export const sshDeploy = async (
   };
 
   try {
-    const desiredNodeVersion = vars.nodeVersion ?? '18';
+    const desiredNodeVersion: '18' | '20' = vars.nodeVersion ?? '18';
     onLog({
       step: 'installing_node',
       message: `Detecting OS and installing Node.js ${desiredNodeVersion}...`,
