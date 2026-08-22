@@ -134,13 +134,18 @@ const createDeploymentSchema = z.object({
 		.regex(/^[a-f\d]{24}$/i)
 		.optional(),
 	region: z.string().min(1).optional(),
+	action: z.enum(["provision", "destroy"]).default("provision"),
 });
 
 /**
- * Creates a deployment record and (Phase 3) enqueues the infra-plan job.
+ * Creates a deployment record and enqueues the infra-plan job.
  * Status lifecycle:
  *   queued → initializing → planning → planned → awaiting_approval
  *   → apply_queued → applying → completed | failed
+ *
+ * Destroy deployments intentionally pin the graph version of the last
+ * COMPLETED provision — tearing down must match what was built, not the
+ * latest canvas edits.
  */
 projectsRoute.post("/:id/deployments", async (c) => {
 	const id = c.req.param("id");
@@ -157,9 +162,27 @@ projectsRoute.post("/:id/deployments", async (c) => {
 		);
 	}
 
-	const graphVersion = await GraphVersion.findOne({ projectId: id })
-		.sort({ version: -1 })
-		.lean();
+	let graphVersion: { _id: unknown } | null;
+	if (parsed.data.action === "destroy") {
+		const lastCompleted = await Deployment.findOne({
+			projectId: id,
+			action: "provision",
+			status: "completed",
+		}).sort({ createdAt: -1 });
+		if (!lastCompleted) {
+			return c.json(
+				{ error: "Nothing to destroy — project has no completed deployment" },
+				409,
+			);
+		}
+		graphVersion = await GraphVersion.findById(
+			lastCompleted.graphVersionId,
+		).lean();
+	} else {
+		graphVersion = await GraphVersion.findOne({ projectId: id })
+			.sort({ version: -1 })
+			.lean();
+	}
 	if (!graphVersion) {
 		return c.json({ error: "Project has no saved infrastructure graph" }, 409);
 	}
@@ -177,6 +200,7 @@ projectsRoute.post("/:id/deployments", async (c) => {
 		projectId: id,
 		graphVersionId: String(graphVersion._id),
 		status: "queued",
+		action: parsed.data.action,
 		awsConnectionId: parsed.data.awsConnectionId,
 		region: parsed.data.region ?? "us-east-1",
 		startedAt: now,
@@ -184,8 +208,11 @@ projectsRoute.post("/:id/deployments", async (c) => {
 
 	await publishDeploymentEvent({
 		deploymentId: String(deployment._id),
-		level: "info",
-		message: `Deployment queued for project "${project.name}"`,
+		level: parsed.data.action === "destroy" ? "error" : "info",
+		message:
+			parsed.data.action === "destroy"
+				? `Destruction requested for project "${project.name}"`
+				: `Deployment queued for project "${project.name}"`,
 		status: "queued",
 		at: now.toISOString(),
 	});

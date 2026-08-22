@@ -1,6 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+
 import type { CompiledFile } from "@my-better-t-app/core";
 import { env } from "@my-better-t-app/env/worker";
 
@@ -10,16 +11,23 @@ function workspaceRoot(): string {
 	);
 }
 
-export function workspacePath(deploymentId: string): string {
-	return path.join(workspaceRoot(), deploymentId);
+/**
+ * Workspaces are keyed by PROJECT so OpenTofu state persists across
+ * deployments and remains available for later destroy operations.
+ */
+export function workspacePath(projectId: string): string {
+	return path.join(workspaceRoot(), projectId);
 }
 
+/**
+ * Writes/overwrites the generated configuration while preserving
+ * existing state files (terraform.tfstate, plans, .terraform).
+ */
 export async function prepareWorkspace(
-	deploymentId: string,
+	projectId: string,
 	files: CompiledFile[],
 ): Promise<string> {
-	const dir = workspacePath(deploymentId);
-	await rm(dir, { recursive: true, force: true });
+	const dir = workspacePath(projectId);
 	await mkdir(dir, { recursive: true });
 	for (const file of files) {
 		const target = path.join(dir, file.path);
@@ -29,10 +37,11 @@ export async function prepareWorkspace(
 	return dir;
 }
 
-export function planFilePath(deploymentId: string): string {
-	return path.join(workspacePath(deploymentId), "tfplan.bin");
+export function planFilePath(projectId: string): string {
+	return path.join(workspacePath(projectId), "tfplan.bin");
 }
 
-export async function cleanupWorkspace(deploymentId: string): Promise<void> {
-	await rm(workspacePath(deploymentId), { recursive: true, force: true });
+/** Full removal — only safe after a successful destroy (state is gone anyway). */
+export async function cleanupWorkspace(projectId: string): Promise<void> {
+	await rm(workspacePath(projectId), { recursive: true, force: true });
 }

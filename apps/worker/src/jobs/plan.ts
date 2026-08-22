@@ -62,16 +62,20 @@ function awsEnv(
 	};
 }
 
-async function mockPlan(): Promise<PlanSummaryData> {
+async function mockSummary(
+	document: { resources: Array<{ kind: string; name: string }> },
+	isDestroy: boolean,
+): Promise<PlanSummaryData> {
 	await sleep(900);
+	const resources = document.resources.map((resource) => ({
+		address: `${resource.kind}.${resource.name}`,
+		action: isDestroy ? "delete" : "create",
+	}));
 	return {
-		create: 2,
+		create: isDestroy ? 0 : resources.length,
 		update: 0,
-		destroy: 0,
-		resources: [
-			{ address: "aws_s3_bucket.assets", action: "create", name: "assets" },
-			{ address: "aws_instance.app", action: "create", name: "app" },
-		],
+		destroy: isDestroy ? resources.length : 0,
+		resources,
 	};
 }
 
@@ -102,11 +106,18 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 
 	const region = deployment.region ?? env.AWS_REGION;
 	const graph = graphVersion.graph as unknown;
+	const isDestroy = deployment.action === "destroy";
+	const projectId = String(deployment.projectId);
 
 	try {
 		await recordDeploymentEvent(
 			deploymentId,
-			{ level: "info", message: "Validating infrastructure graph..." },
+			{
+				level: isDestroy ? "error" : "info",
+				message: isDestroy
+					? "DESTRUCTION RUN — validating current infrastructure graph..."
+					: "Validating infrastructure graph...",
+			},
 			"initializing",
 		);
 
@@ -122,9 +133,9 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 		});
 
 		const files = compileIR(built.document, {
-			bucketNameSuffix: deploymentId.slice(-8),
+			bucketNameSuffix: projectId.slice(-8),
 		});
-		const cwd = await prepareWorkspace(deploymentId, files);
+		const cwd = await prepareWorkspace(projectId, files);
 		await recordDeploymentEvent(deploymentId, {
 			level: "info",
 			message: `OpenTofu workspace prepared (${files.length} files)`,
@@ -140,10 +151,15 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			await sleep(800);
 			await recordDeploymentEvent(
 				deploymentId,
-				{ level: "progress", message: "Simulating tofu plan (mock mode)..." },
+				{
+					level: "progress",
+					message: isDestroy
+						? "Simulating tofu plan -destroy (mock mode)..."
+						: "Simulating tofu plan (mock mode)...",
+				},
 				"planning",
 			);
-			summary = await mockPlan();
+			summary = await mockSummary(built.document, isDestroy);
 		} else {
 			const binary = await resolveBinary();
 			const creds = await resolveAwsCredentials(connection, deploymentId);
@@ -177,12 +193,23 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 
 			await recordDeploymentEvent(
 				deploymentId,
-				{ level: "progress", message: "Planning infrastructure changes..." },
+				{
+					level: "progress",
+					message: isDestroy
+						? "Planning infrastructure destruction (-destroy)..."
+						: "Planning infrastructure changes...",
+				},
 				"planning",
 			);
 			const plan = await runTofu(
 				binary,
-				["plan", "-input=false", "-no-color", "-out=tfplan.bin"],
+				[
+					"plan",
+					"-input=false",
+					"-no-color",
+					"-out=tfplan.bin",
+					...(isDestroy ? ["-destroy"] : []),
+				],
 				{
 					cwd,
 					env: extraEnv,
@@ -223,7 +250,9 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			deploymentId,
 			{
 				level: "success",
-				message: `Plan ready — ${summary.create} to create, ${summary.update} to update, ${summary.destroy} to destroy. Awaiting approval.`,
+				message: isDestroy
+					? `Destruction plan ready — ${summary.destroy} resource(s) will be DESTROYED. Awaiting approval.`
+					: `Plan ready — ${summary.create} to create, ${summary.update} to update, ${summary.destroy} to destroy. Awaiting approval.`,
 				data: summary.resources,
 			},
 			"awaiting_approval",

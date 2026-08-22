@@ -4,6 +4,7 @@ import { env } from "@my-better-t-app/env/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import { awsConnectionsRoute } from "./routes/aws-connections";
 import { compileRoute } from "./routes/compile";
 import { deploymentsRoute } from "./routes/deployments";
 import { projectsRoute } from "./routes/projects";
@@ -43,6 +44,7 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 app.route("/api/projects", projectsRoute);
 app.route("/api/deployments", deploymentsRoute);
 app.route("/api/compile", compileRoute);
+app.route("/api/aws-connections", awsConnectionsRoute);
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
 	console.log(`[api] cloudman api listening on http://localhost:${info.port}`);

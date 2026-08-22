@@ -51,6 +51,13 @@ const deploymentSchema = new Schema(
 		},
 		awsConnectionId: { type: ObjectId, ref: "AwsConnection" },
 		region: { type: String },
+		/** provision = create/update infrastructure, destroy = tear it down */
+		action: {
+			type: String,
+			enum: ["provision", "destroy"],
+			required: true,
+			default: "provision",
+		},
 		planSummary: {
 			create: { type: Number, default: 0 },
 			update: { type: Number, default: 0 },

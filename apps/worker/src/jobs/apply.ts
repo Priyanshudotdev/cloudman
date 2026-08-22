@@ -49,13 +49,17 @@ export async function handleApplyJob(
 
 	const region = deployment.region ?? env.AWS_REGION;
 	const summary = deployment.planSummary;
+	const isDestroy = deployment.action === "destroy";
+	const projectId = String(deployment.projectId);
 
 	try {
 		await recordDeploymentEvent(
 			deploymentId,
 			{
-				level: "info",
-				message: `Applying infrastructure — ${summary?.create ?? 0} to create, ${summary?.update ?? 0} to update, ${summary?.destroy ?? 0} to destroy.`,
+				level: isDestroy ? "error" : "info",
+				message: isDestroy
+					? `DESTROYING infrastructure — ${summary?.destroy ?? 0} resource(s) will be removed.`
+					: `Applying infrastructure — ${summary?.create ?? 0} to create, ${summary?.update ?? 0} to update, ${summary?.destroy ?? 0} to destroy.`,
 			},
 			"applying",
 		);
@@ -66,14 +70,14 @@ export async function handleApplyJob(
 				await sleep(700);
 				await recordDeploymentEvent(deploymentId, {
 					level: "progress",
-					message: `Creating ${resource.address}... (mock)`,
+					message: `${isDestroy ? "Destroying" : "Creating"} ${resource.address}... (mock)`,
 				});
 			}
 			await sleep(500);
 		} else {
 			const binary = await resolveBinary();
 			const creds = await resolveAwsCredentials(connection, deploymentId);
-			const cwd = workspacePath(deploymentId);
+			const cwd = workspacePath(projectId);
 
 			const apply = await runTofu(
 				binary,
@@ -95,8 +99,12 @@ export async function handleApplyJob(
 					`tofu apply failed with exit code ${apply.code}:\n${tail(apply.output)}`,
 				);
 			}
+		}
 
-			await cleanupWorkspace(deploymentId);
+		// After a successful destroy the state is empty — safe to remove the
+		// project workspace. Provision keeps it for future destroys.
+		if (isDestroy) {
+			await cleanupWorkspace(projectId);
 		}
 
 		await Deployment.updateOne(
@@ -111,7 +119,12 @@ export async function handleApplyJob(
 		);
 		await recordDeploymentEvent(
 			deploymentId,
-			{ level: "success", message: "Deployment complete." },
+			{
+				level: "success",
+				message: isDestroy
+					? "Infrastructure destroyed. All resources removed."
+					: "Deployment complete.",
+			},
 			"completed",
 		);
 	} catch (error) {

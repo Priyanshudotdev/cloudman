@@ -82,6 +82,16 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["packages/db/src/models/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
 		}
 	],
 	"css": {
