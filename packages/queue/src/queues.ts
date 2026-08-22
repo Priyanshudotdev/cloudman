@@ -6,6 +6,8 @@ import {
 	INFRA_PLAN_QUEUE,
 	type InfraApplyJobData,
 	type InfraPlanJobData,
+	MAINTENANCE_QUEUE,
+	type MaintenanceJobData,
 } from "./types";
 
 const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -36,4 +38,19 @@ export function getApplyQueue(): Queue<InfraApplyJobData> {
 		},
 	});
 	return applyQueue;
+}
+
+let maintenanceQueue: Queue<MaintenanceJobData> | null = null;
+
+export function getMaintenanceQueue(): Queue<MaintenanceJobData> {
+	maintenanceQueue ??= new Queue<MaintenanceJobData>(MAINTENANCE_QUEUE, {
+		connection,
+		defaultJobOptions: {
+			removeOnComplete: 100,
+			removeOnFail: 100,
+			attempts: 3,
+			backoff: { type: "exponential", delay: 2000 },
+		},
+	});
+	return maintenanceQueue;
 }

@@ -1,5 +1,10 @@
 import { buildIR, compileIR } from "@my-better-t-app/core";
-import { AwsConnection, Deployment, GraphVersion } from "@my-better-t-app/db";
+import {
+	AwsConnection,
+	Deployment,
+	GraphVersion,
+	resolveExternalId,
+} from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/worker";
 import type { InfraPlanJobData } from "@my-better-t-app/queue";
 import type { Job } from "bullmq";
@@ -101,7 +106,10 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			deployment.awsConnectionId,
 		).lean();
 		if (conn)
-			connection = { roleArn: conn.roleArn, externalId: conn.externalId };
+			connection = {
+				roleArn: conn.roleArn,
+				externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
+			};
 	}
 
 	const region = deployment.region ?? env.AWS_REGION;
@@ -177,7 +185,11 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			const init = await runTofu(
 				binary,
 				["init", "-input=false", "-no-color"],
-				{ cwd, env: extraEnv },
+				{
+					cwd,
+					env: extraEnv,
+					timeoutMs: 15 * 60 * 1000,
+				},
 			);
 			throwOnFailure(init, "tofu init");
 
@@ -188,6 +200,7 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			const validate = await runTofu(binary, ["validate", "-no-color"], {
 				cwd,
 				env: extraEnv,
+				timeoutMs: 2 * 60 * 1000,
 			});
 			throwOnFailure(validate, "tofu validate");
 
@@ -213,6 +226,7 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 				{
 					cwd,
 					env: extraEnv,
+					timeoutMs: 10 * 60 * 1000,
 					onLine: (line) => {
 						if (/^(Plan:|Error:|Warning:)/.test(line.trim())) {
 							void recordDeploymentEvent(deploymentId, {
@@ -228,11 +242,20 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			const show = await runTofu(binary, ["show", "-json", "tfplan.bin"], {
 				cwd,
 				env: extraEnv,
+				timeoutMs: 2 * 60 * 1000,
 			});
 			if (show.code !== 0)
 				throw new Error(`tofu show failed:\n${tail(show.output)}`);
 
 			summary = summarizePlan(JSON.parse(show.output) as TofuPlanJson);
+		}
+
+		const fresh = await Deployment.findById(deploymentId)
+			.select("status")
+			.lean();
+		if (fresh?.status === "canceled") {
+			console.log("[worker] plan job aborted — deployment was canceled");
+			return;
 		}
 
 		await Deployment.updateOne(

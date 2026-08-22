@@ -12,11 +12,14 @@ export interface TofuRunOptions {
 	cwd: string;
 	env?: Record<string, string>;
 	onLine?: (line: string) => void;
+	/** Hard limit in milliseconds — the process is killed when exceeded. */
+	timeoutMs?: number;
 }
 
 export interface TofuRunResult {
 	code: number;
 	output: string;
+	timedOut: boolean;
 }
 
 function lineSplitter(onLine?: (line: string) => void) {
@@ -45,7 +48,20 @@ export function runTofu(
 		});
 
 		let output = "";
+		let timedOut = false;
 		const handle = lineSplitter(options.onLine);
+
+		let timer: NodeJS.Timeout | undefined;
+		const timeoutMs = options.timeoutMs;
+		if (timeoutMs && timeoutMs > 0) {
+			timer = setTimeout(() => {
+				timedOut = true;
+				options.onLine?.(
+					`cloudman: command exceeded ${Math.round(timeoutMs / 1000)}s — killing process`,
+				);
+				child.kill();
+			}, timeoutMs);
+		}
 
 		child.stdout.setEncoding("utf8");
 		child.stderr.setEncoding("utf8");
@@ -58,8 +74,14 @@ export function runTofu(
 			handle(chunk);
 		});
 
-		child.on("error", reject);
-		child.on("close", (code) => resolve({ code: code ?? 1, output }));
+		child.on("error", (error) => {
+			if (timer) clearTimeout(timer);
+			reject(error);
+		});
+		child.on("close", (code) => {
+			if (timer) clearTimeout(timer);
+			resolve({ code: code ?? 1, output, timedOut });
+		});
 	});
 }
 

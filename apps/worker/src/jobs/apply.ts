@@ -1,4 +1,8 @@
-import { AwsConnection, Deployment } from "@my-better-t-app/db";
+import {
+	AwsConnection,
+	Deployment,
+	resolveExternalId,
+} from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/worker";
 import type { InfraApplyJobData } from "@my-better-t-app/queue";
 import type { Job } from "bullmq";
@@ -44,7 +48,10 @@ export async function handleApplyJob(
 			deployment.awsConnectionId,
 		).lean();
 		if (conn)
-			connection = { roleArn: conn.roleArn, externalId: conn.externalId };
+			connection = {
+				roleArn: conn.roleArn,
+				externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
+			};
 	}
 
 	const region = deployment.region ?? env.AWS_REGION;
@@ -85,6 +92,7 @@ export async function handleApplyJob(
 				{
 					cwd,
 					env: awsEnv(creds, region),
+					timeoutMs: 20 * 60 * 1000,
 					onLine: (line) => {
 						void recordDeploymentEvent(deploymentId, {
 							level: "progress",

@@ -5,9 +5,14 @@ export {
 	publishDeploymentEvent,
 	subscribeDeploymentEvents,
 } from "./events";
-export { getApplyQueue, getPlanQueue } from "./queues";
-export type { InfraApplyJobData, InfraPlanJobData } from "./types";
+export { getApplyQueue, getMaintenanceQueue, getPlanQueue } from "./queues";
+export type {
+	InfraApplyJobData,
+	InfraPlanJobData,
+	MaintenanceJobData,
+} from "./types";
 export {
 	INFRA_APPLY_QUEUE,
 	INFRA_PLAN_QUEUE,
+	MAINTENANCE_QUEUE,
 } from "./types";
