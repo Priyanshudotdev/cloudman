@@ -1,6 +1,7 @@
 import { Deployment, Project } from "@my-better-t-app/db";
 import {
 	getApplyQueue,
+	getPlanQueue,
 	publishDeploymentEvent,
 	subscribeDeploymentEvents,
 } from "@my-better-t-app/queue";
@@ -103,4 +104,59 @@ deploymentsRoute.post("/:id/approve", async (c) => {
 	);
 
 	return c.json({ ok: true, status: "apply_queued" });
+});
+
+const CANCELLABLE_STATUSES = [
+	"queued",
+	"initializing",
+	"planning",
+	"planned",
+	"awaiting_approval",
+] as const;
+
+deploymentsRoute.post("/:id/cancel", async (c) => {
+	const deployment = await loadOwnedDeployment(c, c.req.param("id"));
+	if (!deployment) return c.json({ error: "Not found" }, 404);
+
+	const status = deployment.status as string;
+	if (
+		!CANCELLABLE_STATUSES.includes(
+			status as (typeof CANCELLABLE_STATUSES)[number],
+		)
+	) {
+		return c.json(
+			{
+				error:
+					status === "apply_queued" || status === "applying"
+						? "Too late to cancel — infrastructure changes are already being applied."
+						: `Deployment is already ${status}.`,
+			},
+			409,
+		);
+	}
+
+	const now = new Date();
+	await Deployment.updateOne(
+		{ _id: deployment._id },
+		{ $set: { status: "canceled", completedAt: now, updatedAt: now } },
+	);
+	try {
+		const removed = await getPlanQueue().remove(String(deployment._id));
+		if (!removed) {
+			console.warn(
+				`[api] cancel: job for ${String(deployment._id)} not found in queue (already picked up?)`,
+			);
+		}
+	} catch (error) {
+		console.error("[api] cancel: failed to remove queued plan job:", error);
+	}
+	await publishDeploymentEvent({
+		deploymentId: String(deployment._id),
+		level: "error",
+		message: "Deployment canceled by user",
+		status: "canceled",
+		at: now.toISOString(),
+	});
+
+	return c.json({ ok: true, status: "canceled" });
 });

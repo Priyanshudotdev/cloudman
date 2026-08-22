@@ -1,4 +1,5 @@
-import { AwsConnection } from "@my-better-t-app/db";
+import { AwsConnection, encryptSecret } from "@my-better-t-app/db";
+import { env } from "@my-better-t-app/env/server";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../lib/session";
@@ -40,6 +41,9 @@ awsConnectionsRoute.post("/", async (c) => {
 	}
 	const connection = await AwsConnection.create({
 		...parsed.data,
+		externalId: env.CLOUDMAN_SECRET
+			? encryptSecret(parsed.data.externalId, env.CLOUDMAN_SECRET)
+			: parsed.data.externalId,
 		userId: c.get("userId"),
 	});
 	const { externalId: _hidden, ...safe } = connection.toObject();

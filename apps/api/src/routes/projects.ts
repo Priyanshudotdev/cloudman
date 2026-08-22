@@ -5,7 +5,11 @@ import {
 	GraphVersion,
 	Project,
 } from "@my-better-t-app/db";
-import { getPlanQueue, publishDeploymentEvent } from "@my-better-t-app/queue";
+import {
+	getMaintenanceQueue,
+	getPlanQueue,
+	publishDeploymentEvent,
+} from "@my-better-t-app/queue";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { type AppEnv, requireAuth } from "../lib/session";
@@ -58,10 +62,54 @@ projectsRoute.delete("/:id", async (c) => {
 	const id = c.req.param("id");
 	const project = await loadOwnedProject(c, id);
 	if (!project) return c.json({ error: "Not found" }, 404);
+
+	const activeStatuses = [
+		"queued",
+		"initializing",
+		"planning",
+		"planned",
+		"awaiting_approval",
+		"apply_queued",
+		"applying",
+	] as const;
+	if (
+		await Deployment.exists({ projectId: id, status: { $in: activeStatuses } })
+	) {
+		return c.json(
+			{ error: "A deployment is in flight — wait for it to finish." },
+			409,
+		);
+	}
+
+	const lastCompleted = await Deployment.findOne({
+		projectId: id,
+		status: "completed",
+	})
+		.sort({ createdAt: -1 })
+		.lean();
+	if (lastCompleted?.action === "provision") {
+		return c.json(
+			{
+				error:
+					"Infrastructure is still deployed — run Destroy before deleting the project.",
+			},
+			409,
+		);
+	}
+
 	await Promise.all([
 		GraphVersion.deleteMany({ projectId: id }),
+		Deployment.deleteMany({ projectId: id }),
 		Project.findByIdAndDelete(id),
 	]);
+	try {
+		await getMaintenanceQueue().add("cleanup-workspace", {
+			kind: "cleanup-workspace",
+			projectId: id,
+		});
+	} catch (error) {
+		console.error("[api] failed to enqueue workspace cleanup:", error);
+	}
 	return c.json({ ok: true });
 });
 
