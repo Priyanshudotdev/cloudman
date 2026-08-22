@@ -64,10 +64,16 @@ export function ProjectHome() {
 		}
 	}
 
-	async function deleteProject(id: string) {
+	async function deleteProject(project: ProjectDto) {
+		const confirmed = window.confirm(
+			`Delete project "${project.name}"? This removes its graph history and deployments. Deployed infrastructure must be destroyed first.`,
+		);
+		if (!confirmed) return;
 		try {
-			await api(`/api/projects/${id}`, { method: "DELETE" });
-			setProjects((current) => current.filter((project) => project._id !== id));
+			await api(`/api/projects/${project._id}`, { method: "DELETE" });
+			setProjects((current) =>
+				current.filter((item) => item._id !== project._id),
+			);
 			toast.success("Project deleted");
 		} catch (error) {
 			toast.error(
@@ -139,7 +145,7 @@ export function ProjectHome() {
 									<Button
 										variant="ghost"
 										size="sm"
-										onClick={() => void deleteProject(project._id)}
+										onClick={() => void deleteProject(project)}
 									>
 										Delete
 									</Button>

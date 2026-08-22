@@ -22,7 +22,7 @@ interface StreamEvent {
 	at: string;
 }
 
-const TERMINAL_STATUSES = new Set(["completed", "failed"]);
+const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
 export function DeployPanel({
 	projectId,
@@ -48,6 +48,7 @@ export function DeployPanel({
 		[],
 	);
 	const [approving, setApproving] = useState(false);
+	const [cancelling, setCancelling] = useState(false);
 	const sourceRef = useRef<EventSource | null>(null);
 	const isDestroy = action === "destroy";
 
@@ -149,6 +150,31 @@ export function DeployPanel({
 		}
 	}
 
+	const CANCELLABLE = new Set([
+		"queued",
+		"initializing",
+		"planning",
+		"planned",
+		"awaiting_approval",
+	]);
+
+	async function cancel() {
+		if (!deploymentId) return;
+		setCancelling(true);
+		try {
+			await api(`/api/deployments/${deploymentId}/cancel`, {
+				method: "POST",
+				body: JSON.stringify({}),
+			});
+			setStatus("canceled");
+			sourceRef.current?.close();
+		} catch (error) {
+			handleStreamError(error);
+		} finally {
+			setCancelling(false);
+		}
+	}
+
 	return (
 		<div className="absolute inset-y-0 right-0 z-20 flex w-96 flex-col border-l bg-card shadow-xl">
 			<div className="flex items-center justify-between border-b px-4 py-3">
@@ -178,6 +204,19 @@ export function DeployPanel({
 					{isDestroy && (
 						<div className="border-b bg-red-50 px-4 py-2 font-medium text-red-700 text-xs dark:bg-red-950 dark:text-red-400">
 							Destruction mode — approved resources will be permanently removed.
+						</div>
+					)}
+
+					{status !== "awaiting_approval" && CANCELLABLE.has(status) && (
+						<div className="border-b px-4 py-3">
+							<Button
+								variant="outline"
+								className="w-full"
+								disabled={cancelling}
+								onClick={() => void cancel()}
+							>
+								{cancelling ? "Cancelling..." : "Cancel deployment"}
+							</Button>
 						</div>
 					)}
 
@@ -211,6 +250,14 @@ export function DeployPanel({
 									: isDestroy
 										? "Approve & destroy"
 										: "Approve & apply"}
+							</Button>
+							<Button
+								variant="outline"
+								className="mt-2 w-full"
+								disabled={cancelling}
+								onClick={() => void cancel()}
+							>
+								{cancelling ? "Cancelling..." : "Cancel deployment"}
 							</Button>
 						</div>
 					)}
