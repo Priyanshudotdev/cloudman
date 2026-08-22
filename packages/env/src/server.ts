@@ -33,6 +33,11 @@ export const env = createEnv({
 		AWS_REGION: z.string().min(1).default("us-east-1"),
 		AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
 		AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+		/** AES-256-GCM key (hex, 32 bytes) used to encrypt AWS connection secrets at rest. */
+		CLOUDMAN_SECRET: z
+			.string()
+			.regex(/^[0-9a-fA-F]{64}$/)
+			.optional(),
 	},
 	runtimeEnv: runtimeEnv,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,

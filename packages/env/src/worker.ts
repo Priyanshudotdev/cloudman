@@ -20,6 +20,11 @@ export const env = createEnv({
 		CLOUDMAN_TOFU_AUTOINSTALL: z.enum(["0", "1"]).default("0"),
 		/** Root directory for per-deployment workspaces. */
 		CLOUDMAN_WORKSPACE_ROOT: z.string().min(1).optional(),
+		/** AES-256-GCM key (hex, 32 bytes) used to encrypt AWS connection secrets at rest. */
+		CLOUDMAN_SECRET: z
+			.string()
+			.regex(/^[0-9a-fA-F]{64}$/)
+			.optional(),
 	},
 	runtimeEnv: process.env,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,

@@ -13,6 +13,7 @@ export const DEPLOYMENT_STATUSES = [
 	"applying",
 	"completed",
 	"failed",
+	"canceled",
 ] as const;
 
 export type DeploymentStatus = (typeof DEPLOYMENT_STATUSES)[number];
