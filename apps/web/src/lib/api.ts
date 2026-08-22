@@ -70,11 +70,21 @@ export interface DeploymentResourceDto {
 	name?: string;
 }
 
+export interface AwsConnectionDto {
+	_id: string;
+	userId: string;
+	label: string;
+	roleArn: string;
+	region: string;
+	createdAt: string;
+}
+
 export interface DeploymentDto {
 	_id: string;
 	projectId: string;
 	graphVersionId: string;
 	status: string;
+	action?: "provision" | "destroy";
 	region?: string;
 	planSummary?: {
 		create: number;

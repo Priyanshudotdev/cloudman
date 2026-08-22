@@ -119,6 +119,9 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [issues, setIssues] = useState<ValidationIssueDto[]>([]);
 	const [busy, setBusy] = useState(false);
 	const [deployOpen, setDeployOpen] = useState(false);
+	const [deployAction, setDeployAction] = useState<"provision" | "destroy">(
+		"provision",
+	);
 
 	useEffect(() => {
 		async function load() {
@@ -294,9 +297,15 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		}
 	}
 
-	async function handleDeploy() {
-		const saved = await handleSave();
-		if (saved) setDeployOpen(true);
+	async function handleDeploy(action: "provision" | "destroy") {
+		// Destruction pins to the last completed provision's graph server-side,
+		// so saving the canvas first is only needed for provision runs.
+		if (action === "provision") {
+			const saved = await handleSave();
+			if (!saved) return;
+		}
+		setDeployAction(action);
+		setDeployOpen(true);
 	}
 
 	const selectedSpec: ResourceUiSpec | null = selectedNode
@@ -339,7 +348,19 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					>
 						Save
 					</Button>
-					<Button size="sm" disabled={busy} onClick={() => void handleDeploy()}>
+					<Button
+						variant="destructive"
+						size="sm"
+						disabled={busy}
+						onClick={() => void handleDeploy("destroy")}
+					>
+						Destroy
+					</Button>
+					<Button
+						size="sm"
+						disabled={busy}
+						onClick={() => void handleDeploy("provision")}
+					>
 						Deploy
 					</Button>
 				</div>
@@ -413,6 +434,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					{deployOpen && (
 						<DeployPanel
 							projectId={projectId}
+							action={deployAction}
 							onClose={() => setDeployOpen(false)}
 						/>
 					)}
