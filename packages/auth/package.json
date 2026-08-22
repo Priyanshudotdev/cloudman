@@ -1,25 +1,25 @@
 {
-  "name": "@my-better-t-app/auth",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    },
-    "./*": {
-      "default": "./src/*.ts"
-    }
-  },
-  "scripts": {},
-  "dependencies": {
-    "@my-better-t-app/db": "workspace:*",
-    "@my-better-t-app/env": "workspace:*",
-    "better-auth": "catalog:",
-    "dotenv": "catalog:",
-    "mongodb": "^7.5.0",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@my-better-t-app/config": "workspace:*",
-    "typescript": "catalog:"
-  }
+	"name": "@my-better-t-app/auth",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {},
+	"dependencies": {
+		"@my-better-t-app/db": "workspace:*",
+		"@my-better-t-app/env": "workspace:*",
+		"better-auth": "catalog:",
+		"dotenv": "catalog:",
+		"mongodb": "^7.5.0",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@my-better-t-app/config": "workspace:*",
+		"typescript": "catalog:"
+	}
 }

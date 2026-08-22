@@ -1,113 +1,129 @@
-# my-better-t-app
+# CloudMan
 
-This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines Next.js, Self, and more.
+> **CloudMan is a visual AWS infrastructure control plane** that lets developers design
+> infrastructure on a node-based canvas, review the generated OpenTofu plan, and safely
+> deploy it into their own AWS account.
 
-## Features
+Technically: CloudMan converts a visual infrastructure graph into an intermediate
+representation (CloudMan IR), compiles it to OpenTofu, executes deployments through an
+isolated worker using AWS STS AssumeRole, and streams deployment state back to the
+frontend in real time.
 
-- **TypeScript** - For type safety and improved developer experience
-- **Next.js** - Full-stack React framework
-- **TailwindCSS** - Utility-first CSS for rapid UI development
-- **Shared UI package** - shadcn/ui primitives live in `packages/ui`
-- **Mongoose** - TypeScript-first ORM
-- **MongoDB** - Database engine
-- **Authentication** - Better-Auth
-- **Biome** - Linting and formatting
-- **Turborepo** - Optimized monorepo build system
+## How it works
 
-## Getting Started
+```
+                USER
+                 │
+        ┌────────▼────────┐
+        │  React Web App  │   drag/drop EC2 · S3, configure resources
+        │  Visual Canvas  │
+        └────────┬────────┘
+           Graph JSON (REST)
+        ┌────────▼────────┐
+        │    API (Hono)   │   auth · projects · graphs · validation
+        │  Graph Engine   │   compile preview · deployment control
+        └───┬─────────┬───┘
+            │         │  BullMQ (infra-plan / infra-apply)
+     MongoDB│      ┌──▼──────┐
+            │      │ Worker  │   workspace → STS AssumeRole
+            │      │         │   tofu init/validate/plan/apply
+            │      └──┬──────┘
+            │         │ events (Redis pub/sub)
+            │      ┌──▼──────┐
+            │      │ API SSE │──► live deployment logs in browser
+            ▼      └─────────┘
+        Graph versions · Deployments · Plan summaries
+```
 
-First, install the dependencies:
+Every deployment follows a strict lifecycle with **human approval** in the middle:
+
+```
+queued → initializing → planning → planned → awaiting_approval
+       → [user reviews plan] → apply_queued → applying → completed | failed
+```
+
+## Monorepo layout
+
+| Path                  | What it is                                                              |
+| --------------------- | ----------------------------------------------------------------------- |
+| `apps/web`            | Next.js 16 frontend — canvas editor, config panel, deploy drawer         |
+| `apps/api`            | Hono control-plane API — REST + Better Auth + SSE                        |
+| `apps/worker`         | Long-running worker — OpenTofu execution, STS AssumeRole                 |
+| `packages/core`       | Domain engine: graph schema, validation, dependency resolution, **CloudMan IR**, IR→OpenTofu compiler |
+| `packages/queue`      | BullMQ queue definitions + Redis pub/sub event bus                       |
+| `packages/db`         | Mongoose models (projects, graph versions, deployments, AWS connections) |
+| `packages/auth`       | Better Auth (email/password) on the MongoDB adapter                      |
+| `packages/env`        | Type-safe environment schemas per app (`server`, `worker`, `queue`, `db`, `web`) |
+| `packages/ui`         | Shared shadcn-style components                                           |
+
+## Prerequisites
+
+- [Bun](https://bun.sh) 1.3+
+- Docker (for local MongoDB + Redis)
+- OpenTofu binary for real deployments (`winget install OpenTofu.Tofu`, or set
+  `CLOUDMAN_TOFU_AUTOINSTALL=1` on the worker to auto-download it)
+
+## Getting started
 
 ```bash
 bun install
+
+# local infrastructure
+docker compose up -d
+
+# development (three shells, or use turbo)
+bun run dev          # everything via turborepo
+bun run dev:web      # http://localhost:3001
+bun run dev:api      # http://localhost:4000
+bun run dev:worker   # consumes infra-plan / infra-apply queues
 ```
 
-## Database Setup
+Each app reads its own `.env` (see `.env.example`). The worker defaults to
+`CLOUDMAN_WORKER_MOCK=0`; set `CLOUDMAN_WORKER_MOCK=1` to simulate tofu execution
+without touching AWS.
 
-This project uses MongoDB with Mongoose.
+## Using CloudMan
 
-1. Make sure you have MongoDB set up.
-2. Update your `apps/web/.env` file with your MongoDB connection URI.
+1. Sign up at `http://localhost:3001/login`
+2. Create a project from the dashboard
+3. Drag **EC2** and **S3** nodes onto the canvas, connect dependencies
+   (arrow = "depends on"), configure each node in the side panel
+4. **Validate** compiles the graph to OpenTofu server-side and reports issues
+5. **Save** stores a new immutable graph version
+6. **Deploy** opens the live deployment view:
+   - worker validates, prepares a workspace, runs `tofu init/validate/plan`
+   - plan summary (create/update/destroy counts per resource) appears for review
+   - you approve → worker runs `tofu apply` streaming progress until completion
 
-Then, run the development server:
+### Connecting your AWS account
 
-```bash
-bun run dev
-```
+Deployments run against **your** AWS account. Create an IAM role CloudMan may assume
+(trust policy restricted by external ID) and register its ARN as an AWS connection;
+the worker calls `sts:AssumeRole` per deployment and never stores long-term keys.
+For local experiments you can instead set `AWS_ACCESS_KEY_ID` /
+`AWS_SECRET_ACCESS_KEY` on the worker env.
 
-Open [http://localhost:3001](http://localhost:3001) in your browser to see the fullstack application.
+## Verification status
 
-## UI Customization
+- `packages/core`: 15 unit tests (validation, cycles, topological order, IR defaults,
+  compiled HCL assertions) — `bun test`
+- Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
+- Full lifecycle verified end-to-end (mock mode): canvas graph → queued → planned →
+  approved → completed, with persisted audit trail and live SSE events
+- Real mode verified up to the AWS boundary (graceful failure without credentials)
 
-React web apps in this stack share shadcn/ui primitives through `packages/ui`.
+## Roadmap
 
-- Change design tokens and global styles in `packages/ui/src/styles/globals.css`
-- Update shared primitives in `packages/ui/src/components/*`
-- Adjust shadcn aliases or style config in `packages/ui/components.json` and `apps/web/components.json`
+- VPC / subnet / security-group resource types
+- S3 state backend per project
+- Cost estimation & risk analysis on plans
+- AI-assisted graph generation (natural language → infrastructure graph)
 
-### Add more shared components
+## Scripts
 
-Run this from the project root to add more primitives to the shared UI package:
-
-```bash
-npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
-```
-
-Import shared components like this:
-
-```tsx
-import { Button } from "@my-better-t-app/ui/components/button";
-```
-
-### Add app-specific blocks
-
-If you want to add app-specific blocks instead of shared primitives, run the shadcn CLI from `apps/web`.
-
-## Deployment
-
-### Vercel Services
-
-- Target: web + server
-- Config: `vercel.json`
-- Link the project first: bun run deploy:setup
-- Local Vercel dev: bun run dev:vercel
-- Sync preview env: bun run env:preview
-- Sync production env: bun run env:production
-- Dry-run check (no upload): bun run deploy:check
-- Preview deploy: bun run deploy
-- Production deploy: bun run deploy:prod
-  Vercel Services share project environment variables, but deploys do not upload local `.env` files automatically. Link the project with `vercel link`, then run the env sync command before your first deploy (otherwise the deployment starts with no env vars), or pass one-off envs with `vercel deploy -e KEY=value`.
-  Pass Vercel CLI flags to the env sync command directly, for example: `bun run env:production --scope your-team`.
-
-For more details, see the guide on [Deploying to Vercel](https://www.better-t-stack.dev/docs/guides/vercel).
-
-## Git Hooks and Formatting
-
-- Run checks: `bun run check`
-
-## Project Structure
-
-```
-my-better-t-app/
-├── apps/
-│   └── web/         # Fullstack application (Next.js)
-├── packages/
-│   ├── ui/          # Shared shadcn/ui components and styles
-│   ├── auth/        # Authentication configuration & logic
-│   └── db/          # Database schema & queries
-```
-
-## Available Scripts
-
-- `bun run dev`: Start all applications in development mode
-- `bun run build`: Build all applications
-- `bun run dev:web`: Start only the web application
-- `bun run check-types`: Check TypeScript types across all apps
-- `bun run check`: Run Biome formatting and linting
-- `bun run deploy:setup`: Link this repo to a Vercel project (first-time setup)
-- `bun run dev:vercel`: Run the Vercel Services dev environment locally
-- `bun run env:preview`: Sync local env files to the Vercel preview environment
-- `bun run env:production`: Sync local env files to the Vercel production environment
-- `bun run deploy`: Create a Vercel preview deployment
-- `bun run deploy:prod`: Deploy to Vercel production
-- `bun run deploy:check`: Dry-run a deploy to preview framework detection and included files without uploading
+| Command             | Purpose                          |
+| ------------------- | -------------------------------- |
+| `bun run check`     | Biome lint/format (write mode)   |
+| `bun run check-types` | TypeScript across all packages |
+| `bun test`          | Core domain tests                |
+| `docker compose up -d` | Start MongoDB + Redis         |
