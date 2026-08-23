@@ -1,7 +1,9 @@
 import { ZodError } from "zod";
 
 import { getResourceDefinition } from "../registry";
+import { cidrContains } from "./cidr";
 import { resolveDependencies } from "./dependencies";
+import { resolveNodeRefs, sgEffectiveVpc } from "./refs";
 import {
 	type GraphEdge,
 	type GraphNode,
@@ -131,5 +133,109 @@ export function validateGraph(input: unknown): GraphValidationResult {
 		});
 	}
 
+	issues.push(...validateNetworking(graph, firstNodeById));
+
 	return { valid: issues.length === 0, issues };
+}
+
+/** Reads the parsed cidrBlock of a node's config, tolerating invalid configs. */
+function resolvedCidr(node: GraphNode): string | undefined {
+	const definition = getResourceDefinition(node.type);
+	if (!definition) return undefined;
+	try {
+		const config = definition.resolveConfig(node.config) as Record<
+			string,
+			unknown
+		>;
+		return typeof config.cidrBlock === "string" ? config.cidrBlock : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Networking wiring rules (consumer → dependency edge direction):
+ *  - subnet must point at exactly one VPC whose CIDR contains its own
+ *  - an instance may live in at most one subnet
+ *  - a security group must resolve to a VPC directly or via an attached instance
+ */
+function validateNetworking(
+	graph: InfrastructureGraph,
+	firstNodeById: Map<string, GraphNode>,
+): ValidationIssue[] {
+	const issues: ValidationIssue[] = [];
+	const typeOf = (id: string): string | undefined =>
+		firstNodeById.get(id)?.type;
+	const nodeRefs = resolveNodeRefs(graph);
+
+	for (const [nodeId, node] of firstNodeById) {
+		if (node.type === "aws_subnet") {
+			const parentVpcs = [
+				...new Set(
+					graph.edges
+						.filter(
+							(edge) =>
+								edge.source === nodeId && typeOf(edge.target) === "aws_vpc",
+						)
+						.map((edge) => edge.target),
+				),
+			];
+			if (parentVpcs.length === 0) {
+				issues.push({
+					code: "SUBNET_NO_VPC",
+					message: `subnet "${nodeId}" must be connected to a VPC`,
+					path: { kind: "node", id: nodeId },
+				});
+			} else if (parentVpcs.length > 1) {
+				issues.push({
+					code: "SUBNET_MULTIPLE_VPCS",
+					message: `subnet "${nodeId}" is connected to multiple VPCs (${parentVpcs.join(", ")})`,
+					path: { kind: "node", id: nodeId },
+				});
+			} else {
+				const child = resolvedCidr(node);
+				const parentNode = firstNodeById.get(parentVpcs[0] ?? "");
+				const parent = parentNode ? resolvedCidr(parentNode) : undefined;
+				if (child && parent && !cidrContains(parent, child)) {
+					issues.push({
+						code: "SUBNET_CIDR_OUTSIDE_VPC",
+						message: `subnet "${nodeId}" CIDR ${child} is outside its VPC block ${parent}`,
+						path: { kind: "node", id: nodeId },
+					});
+				}
+			}
+		}
+
+		if (node.type === "aws_ec2") {
+			const subnets = [
+				...new Set(
+					graph.edges
+						.filter(
+							(edge) =>
+								edge.source === nodeId && typeOf(edge.target) === "aws_subnet",
+						)
+						.map((edge) => edge.target),
+				),
+			];
+			if (subnets.length > 1) {
+				issues.push({
+					code: "EC2_MULTIPLE_SUBNETS",
+					message: `instance "${nodeId}" is connected to multiple subnets (${subnets.join(", ")})`,
+					path: { kind: "node", id: nodeId },
+				});
+			}
+		}
+
+		if (node.type === "aws_security_group") {
+			if (!sgEffectiveVpc(nodeId, graph, nodeRefs)) {
+				issues.push({
+					code: "SG_NO_VPC",
+					message: `security group "${nodeId}" must be connected to a VPC (directly or via an attached instance)`,
+					path: { kind: "node", id: nodeId },
+				});
+			}
+		}
+	}
+
+	return issues;
 }

@@ -1,8 +1,17 @@
 import { ec2Resource } from "./resources/ec2";
 import { s3Resource } from "./resources/s3";
+import { securityGroupResource } from "./resources/security-group";
+import { subnetResource } from "./resources/subnet";
+import { vpcResource } from "./resources/vpc";
 import type { RegisteredResource } from "./types";
 
-const resources: readonly RegisteredResource[] = [ec2Resource, s3Resource];
+const resources: readonly RegisteredResource[] = [
+	ec2Resource,
+	s3Resource,
+	vpcResource,
+	subnetResource,
+	securityGroupResource,
+];
 
 const byType = new Map<string, RegisteredResource>(
 	resources.map((r) => [r.type, r]),
@@ -26,4 +35,18 @@ export {
 } from "./resources/ec2";
 export type { S3Config } from "./resources/s3";
 export { s3ConfigSchema, s3Resource } from "./resources/s3";
+export type {
+	IngressRule,
+	SecurityGroupConfig,
+} from "./resources/security-group";
+export {
+	ingressRuleSchema,
+	SG_PROTOCOLS,
+	securityGroupConfigSchema,
+	securityGroupResource,
+} from "./resources/security-group";
+export type { SubnetConfig } from "./resources/subnet";
+export { subnetConfigSchema, subnetResource } from "./resources/subnet";
+export type { VpcConfig } from "./resources/vpc";
+export { vpcConfigSchema, vpcResource } from "./resources/vpc";
 export * from "./types";

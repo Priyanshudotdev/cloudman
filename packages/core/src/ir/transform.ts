@@ -1,4 +1,5 @@
 import { resolveDependencies } from "../graph/dependencies";
+import { resolveNodeRefs, sgEffectiveVpc } from "../graph/refs";
 import type { InfrastructureGraph } from "../graph/schema";
 import { infrastructureGraphSchema } from "../graph/schema";
 import type { ValidationIssue } from "../graph/validate";
@@ -51,6 +52,7 @@ export function buildIR(
 	// before transformation — the raw input may omit optional fields.
 	const graph: InfrastructureGraph = infrastructureGraphSchema.parse(input);
 
+	const nodeRefs = resolveNodeRefs(graph);
 	const resolution = resolveDependencies(graph);
 	const orderedIds = resolution.ok
 		? resolution.order
@@ -87,7 +89,7 @@ export function buildIR(
 			kind: definition.tofuKind,
 			name: names.get(nodeId) ?? nodeId,
 			label: node.label ?? definition.label,
-			attributes: mapAttributes(node.type, resolved),
+			attributes: mapAttributes(node.type, resolved, nodeId, graph, nodeRefs),
 			dependsOn: graph.edges
 				.filter((edge) => edge.source === nodeId && nodeIds.has(edge.target))
 				.map((edge) => edge.target),
@@ -108,9 +110,14 @@ export function buildIR(
 function mapAttributes(
 	resourceType: string,
 	config: Record<string, unknown>,
+	nodeId: string,
+	graph: InfrastructureGraph,
+	nodeRefs: ReturnType<typeof resolveNodeRefs>,
 ): Record<string, unknown> {
 	switch (resourceType) {
-		case "aws_ec2":
+		case "aws_ec2": {
+			const subnetRef = nodeRefs.get(nodeId)?.subnet;
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
 			return {
 				instance_type: config.instanceType,
 				...(typeof config.ami === "string" && config.ami.length > 0
@@ -121,7 +128,10 @@ function mapAttributes(
 					? { key_name: config.keyPairName }
 					: {}),
 				volume_size_gb: config.volumeSizeGb,
+				...(subnetRef ? { subnet_ref: subnetRef } : {}),
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
 			};
+		}
 		case "aws_s3":
 			return {
 				...(typeof config.bucketName === "string" &&
@@ -131,6 +141,39 @@ function mapAttributes(
 				versioning: config.versioning,
 				force_destroy: config.forceDestroy,
 			};
+		case "aws_vpc":
+			return {
+				cidr_block: config.cidrBlock,
+				enable_dns_hostnames: config.enableDnsHostnames,
+			};
+		case "aws_subnet": {
+			const vpcRef = nodeRefs.get(nodeId)?.vpc;
+			return {
+				cidr_block: config.cidrBlock,
+				...(typeof config.availabilityZone === "string" &&
+				config.availabilityZone.length > 0
+					? { availability_zone: config.availabilityZone }
+					: {}),
+				...(vpcRef ? { vpc_ref: vpcRef } : {}),
+			};
+		}
+		case "aws_security_group": {
+			const vpcRef = sgEffectiveVpc(nodeId, graph, nodeRefs);
+			return {
+				description: config.description,
+				ingress_rules: Array.isArray(config.ingressRules)
+					? (config.ingressRules as Array<Record<string, unknown>>).map(
+							(rule) => ({
+								from_port: rule.fromPort,
+								to_port: rule.toPort,
+								protocol: rule.protocol,
+								cidr_block: rule.cidrBlock,
+							}),
+						)
+					: [],
+				...(vpcRef ? { vpc_ref: vpcRef } : {}),
+			};
+		}
 		default:
 			return {};
 	}
