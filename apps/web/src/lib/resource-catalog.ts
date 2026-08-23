@@ -88,6 +88,69 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 			},
 		],
 	},
+	aws_vpc: {
+		type: "aws_vpc",
+		label: "VPC",
+		description: "Isolated virtual network",
+		icon: Network,
+		accent: "#38bdf8",
+		idPrefix: "vpc",
+		fields: [
+			{
+				key: "cidrBlock",
+				label: "CIDR block",
+				type: "text",
+				default: "10.0.0.0/16",
+				placeholder: "10.0.0.0/16",
+			},
+			{
+				key: "enableDnsHostnames",
+				label: "DNS hostnames",
+				type: "boolean",
+				default: true,
+			},
+		],
+	},
+	aws_subnet: {
+		type: "aws_subnet",
+		label: "Subnet",
+		description: "Subnet inside a VPC",
+		icon: Network,
+		accent: "#818cf8",
+		idPrefix: "subnet",
+		fields: [
+			{
+				key: "cidrBlock",
+				label: "CIDR block",
+				type: "text",
+				placeholder: "10.0.1.0/24",
+			},
+			{
+				key: "availabilityZone",
+				label: "Availability zone",
+				type: "text",
+				optional: true,
+				placeholder: "auto: first AZ",
+			},
+		],
+	},
+	aws_security_group: {
+		type: "aws_security_group",
+		label: "Security Group",
+		description: "Instance-level firewall rules",
+		icon: Network,
+		accent: "#f43f5e",
+		idPrefix: "sg",
+		fields: [
+			{
+				key: "description",
+				label: "Description",
+				type: "text",
+				optional: true,
+				placeholder: "Managed by CloudMan",
+			},
+		],
+	},
 };
 
 /** Extra palette entries shown but not yet compiled — kept honest by exclusion from specs. */
