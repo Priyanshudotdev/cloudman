@@ -86,8 +86,9 @@ without touching AWS.
 
 1. Sign up at `http://localhost:3001/login`
 2. Create a project from the dashboard
-3. Drag **EC2** and **S3** nodes onto the canvas, connect dependencies
-   (arrow = "depends on"), configure each node in the side panel
+3. Drag **EC2**, **S3**, **VPC**, **Subnet** and **Security Group** nodes onto the
+   canvas, connect dependencies (arrow = "depends on"), configure each node in
+   the side panel
 4. **Validate** compiles the graph to OpenTofu server-side and reports issues
 5. **Save** stores a new immutable graph version
 6. **Deploy** opens the live deployment view:
@@ -95,27 +96,102 @@ without touching AWS.
    - plan summary (create/update/destroy counts per resource) appears for review
    - you approve → worker runs `tofu apply` streaming progress until completion
 
+#### Networking wiring rules
+
+Edges are consumer → dependency. The graph validator enforces:
+
+- a **subnet** must connect to exactly one **VPC**, and its CIDR must fall
+  inside the VPC's block (`SUBNET_NO_VPC`, `SUBNET_MULTIPLE_VPCS`,
+  `SUBNET_CIDR_OUTSIDE_VPC`)
+- an **instance** may live in at most one subnet (`EC2_MULTIPLE_SUBNETS`)
+- a **security group** must resolve to a VPC either directly (`sg → vpc`) or by
+  inheritance through an attached instance's subnet (`SG_NO_VPC`)
+
+The compiler turns these edges into real references: instances receive
+`subnet_id` / `vpc_security_group_ids`, subnets receive `vpc_id`, security
+groups get an explicit allow-all egress plus their configured ingress rules.
+
 ### Connecting your AWS account
 
-Deployments run against **your** AWS account. Create an IAM role CloudMan may assume
-(trust policy restricted by external ID) and register its ARN as an AWS connection;
-the worker calls `sts:AssumeRole` per deployment and never stores long-term keys.
+Deployments run against **your** AWS account via cross-account role assumption.
+Register an AWS connection in *Settings → AWS connections* (role ARN + external
+ID), then use **Verify** to prove the chain end-to-end before deploying:
+CloudMan calls `sts:AssumeRole` with your external ID and resolves
+`sts:GetCallerIdentity` with the temporary credentials.
+
+<details>
+<summary>IAM trust policy runbook</summary>
+
+In the target account, create a role (e.g. `CloudManDeployRole`) with a trust
+policy that allows CloudMan's worker principal to assume it, conditioned on the
+external ID you chose in the connection form:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": { "AWS": "arn:aws:iam::<WORKER_ACCOUNT_ID>:root" },
+      "Action": "sts:AssumeRole",
+      "Condition": {
+        "StringEquals": { "sts:ExternalId": "<YOUR_EXTERNAL_ID>" }
+      }
+    }
+  ]
+}
+```
+
+Attach permissions the deployments need, e.g. for the current resource set:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateVpc", "ec2:DeleteVpc",
+        "ec2:CreateSubnet", "ec2:DeleteSubnet",
+        "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupEgress",
+        "ec2:Describe*", "ec2:CreateTags", "ec2:DeleteTags",
+        "ec2:RunInstances", "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute",
+        "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:Get*",
+        "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Notes:
+
+- Choose a random external ID (≥ 8 chars); it prevents the confused-deputy
+  attack and is stored encrypted at rest when `CLOUDMAN_SECRET` is set on the API.
+- Scope `Resource` tighter in production (specific VPC/bucket ARN patterns).
+
+</details>
+
 For local experiments you can instead set `AWS_ACCESS_KEY_ID` /
 `AWS_SECRET_ACCESS_KEY` on the worker env.
 
 ## Verification status
 
-- `packages/core`: 15 unit tests (validation, cycles, topological order, IR defaults,
-  compiled HCL assertions) — `bun test`
+- `packages/core`: 27 unit tests (validation, cycles, topological order, IR defaults,
+  CIDR math, networking wiring rules, compiled HCL assertions) — `bun test`
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
 - Full lifecycle verified end-to-end (mock mode): canvas graph → queued → planned →
   approved → completed, with persisted audit trail and live SSE events
+- Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
+  cancellation at every stage, worker-restart reconciliation, encrypted external IDs
 - Real mode verified up to the AWS boundary (graceful failure without credentials)
 
 ## Roadmap
 
-- VPC / subnet / security-group resource types
 - S3 state backend per project
+- Security-group ingress rule editor on the canvas config panel
 - Cost estimation & risk analysis on plans
 - AI-assisted graph generation (natural language → infrastructure graph)
 
