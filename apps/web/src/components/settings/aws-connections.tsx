@@ -28,6 +28,7 @@ export function AwsConnectionsManager() {
 	const [loading, setLoading] = useState(true);
 	const [form, setForm] = useState(EMPTY_FORM);
 	const [saving, setSaving] = useState(false);
+	const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
 	const load = useCallback(async () => {
 		try {
@@ -82,6 +83,33 @@ export function AwsConnectionsManager() {
 			toast.error(
 				error instanceof Error ? error.message : "Failed to remove connection",
 			);
+		}
+	}
+
+	async function verifyConnection(id: string) {
+		setVerifyingId(id);
+		try {
+			const result = await api<{
+				ok: boolean;
+				account?: string;
+				arn?: string;
+				error?: string;
+			}>(`/api/aws-connections/${id}/verify`, { method: "POST" });
+			toast.success(
+				`Verified — account ${result.account ?? "?"} (${result.arn ?? "unknown identity"})`,
+			);
+		} catch (error) {
+			if (error instanceof ApiError && error.message) {
+				toast.error(`Verification failed: ${error.message}`);
+			} else {
+				toast.error(
+					error instanceof Error
+						? `Verification failed: ${error.message}`
+						: "Verification failed",
+				);
+			}
+		} finally {
+			setVerifyingId(null);
 		}
 	}
 
@@ -184,13 +212,23 @@ export function AwsConnectionsManager() {
 										region: {connection.region}
 									</p>
 								</div>
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => void deleteConnection(connection._id)}
-								>
-									Remove
-								</Button>
+								<div className="flex shrink-0 items-center gap-2">
+									<Button
+										disabled={verifyingId !== null}
+										size="sm"
+										variant="outline"
+										onClick={() => void verifyConnection(connection._id)}
+									>
+										{verifyingId === connection._id ? "Verifying..." : "Verify"}
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => void deleteConnection(connection._id)}
+									>
+										Remove
+									</Button>
+								</div>
 							</CardContent>
 						</Card>
 					))}
