@@ -1,7 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { Boxes, Container, Database, Network, Server } from "lucide-react";
 
-export type FieldType = "text" | "number" | "boolean" | "select";
+export type FieldType = "text" | "number" | "boolean" | "select" | "list";
 
 export interface FieldDescriptor {
 	key: string;
@@ -13,6 +13,8 @@ export interface FieldDescriptor {
 	placeholder?: string;
 	optional?: boolean;
 	default?: unknown;
+	/** For list fields: schema of one entry. */
+	itemFields?: FieldDescriptor[];
 }
 
 export interface ResourceUiSpec {
@@ -148,6 +150,42 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				type: "text",
 				optional: true,
 				placeholder: "Managed by CloudMan",
+			},
+			{
+				key: "ingressRules",
+				label: "Ingress rules",
+				type: "list",
+				itemFields: [
+					{
+						key: "fromPort",
+						label: "From port",
+						type: "number",
+						min: 0,
+						max: 65535,
+						default: 443,
+					},
+					{
+						key: "toPort",
+						label: "To port",
+						type: "number",
+						min: 0,
+						max: 65535,
+						default: 443,
+					},
+					{
+						key: "protocol",
+						label: "Protocol",
+						type: "select",
+						options: ["tcp", "udp", "icmp"],
+						default: "tcp",
+					},
+					{
+						key: "cidrBlock",
+						label: "Source CIDR",
+						type: "text",
+						default: "0.0.0.0/0",
+					},
+				],
 			},
 		],
 	},
