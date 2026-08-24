@@ -177,6 +177,17 @@ Notes:
 For local experiments you can instead set `AWS_ACCESS_KEY_ID` /
 `AWS_SECRET_ACCESS_KEY` on the worker env.
 
+### State management
+
+Each project gets a dedicated OpenTofu state backend: by default the worker
+creates `s3://cloudman-tfstate-<projectId>` in the deployment region (in the
+target account, via the assumed role) and writes a `backend.tf` with native S3
+lockfile locking before `tofu init`. Destroy runs read state from the same
+bucket, so teardown works even if the local workspace was wiped. State buckets
+are retained after destroys for auditability — remove them manually if you
+don't want them. Set `CLOUDMAN_REMOTE_STATE=0` on the worker to keep state in
+the local workspace instead.
+
 ## Verification status
 
 - `packages/core`: 27 unit tests (validation, cycles, topological order, IR defaults,
@@ -184,14 +195,14 @@ For local experiments you can instead set `AWS_ACCESS_KEY_ID` /
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
 - Full lifecycle verified end-to-end (mock mode): canvas graph → queued → planned →
   approved → completed, with persisted audit trail and live SSE events
+- Networking stack verified end-to-end (mock mode): vpc → subnet → security group →
+  instance wiring, CIDR containment rejection, guarded deletes, destroy + workspace cleanup
 - Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
   cancellation at every stage, worker-restart reconciliation, encrypted external IDs
 - Real mode verified up to the AWS boundary (graceful failure without credentials)
 
 ## Roadmap
 
-- S3 state backend per project
-- Security-group ingress rule editor on the canvas config panel
 - Cost estimation & risk analysis on plans
 - AI-assisted graph generation (natural language → infrastructure graph)
 
