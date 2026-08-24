@@ -20,6 +20,8 @@ export const env = createEnv({
 		CLOUDMAN_TOFU_AUTOINSTALL: z.enum(["0", "1"]).default("0"),
 		/** Root directory for per-deployment workspaces. */
 		CLOUDMAN_WORKSPACE_ROOT: z.string().min(1).optional(),
+		/** "0" keeps OpenTofu state in the local workspace instead of an S3 bucket. */
+		CLOUDMAN_REMOTE_STATE: z.enum(["0", "1"]).default("1"),
 		/** AES-256-GCM key (hex, 32 bytes) used to encrypt AWS connection secrets at rest. */
 		CLOUDMAN_SECRET: z
 			.string()

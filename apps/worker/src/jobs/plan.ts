@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { buildIR, compileIR } from "@my-better-t-app/core";
 import {
 	AwsConnection,
@@ -10,6 +12,12 @@ import type { InfraPlanJobData } from "@my-better-t-app/queue";
 import type { Job } from "bullmq";
 import { resolveAwsCredentials } from "../lib/aws";
 import { recordDeploymentEvent, sleep, tail } from "../lib/events";
+import {
+	backendTfContents,
+	createStateClient,
+	ensureStateBucket,
+	stateBucketName,
+} from "../lib/state-backend";
 import { runTofu, type TofuRunResult } from "../lib/tofu";
 import { prepareWorkspace } from "../lib/workspace";
 
@@ -152,6 +160,12 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 		let summary: PlanSummaryData;
 
 		if (env.CLOUDMAN_WORKER_MOCK === "1") {
+			if (env.CLOUDMAN_REMOTE_STATE === "1" && !isDestroy) {
+				await recordDeploymentEvent(deploymentId, {
+					level: "info",
+					message: `Remote state backend simulated: s3://${stateBucketName(projectId)} (mock mode)`,
+				});
+			}
 			await recordDeploymentEvent(deploymentId, {
 				level: "progress",
 				message: "Simulating tofu init (mock mode)...",
@@ -175,6 +189,21 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 				level: "info",
 				message: `AWS credentials resolved via ${creds.source}`,
 			});
+
+			if (env.CLOUDMAN_REMOTE_STATE === "1") {
+				const bucket = stateBucketName(projectId);
+				const s3 = createStateClient(creds, region);
+				const bucketState = await ensureStateBucket(s3, bucket, region);
+				await recordDeploymentEvent(deploymentId, {
+					level: "info",
+					message: `Remote state backend: s3://${bucket} (${bucketState})`,
+				});
+				await writeFile(
+					join(cwd, "backend.tf"),
+					backendTfContents(bucket, region, projectId),
+					"utf8",
+				);
+			}
 
 			await recordDeploymentEvent(
 				deploymentId,
