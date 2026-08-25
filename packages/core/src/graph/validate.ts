@@ -235,6 +235,17 @@ function validateNetworking(
 				});
 			}
 		}
+
+		if (node.type === "aws_rds") {
+			const subnetCount = nodeRefs.get(nodeId)?.subnets.length ?? 0;
+			if (subnetCount < 2) {
+				issues.push({
+					code: "RDS_SUBNET_COUNT",
+					message: `database "${nodeId}" needs subnets in at least two availability zones (connected to ${subnetCount})`,
+					path: { kind: "node", id: nodeId },
+				});
+			}
+		}
 	}
 
 	return issues;

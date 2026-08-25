@@ -174,6 +174,35 @@ function mapAttributes(
 				...(vpcRef ? { vpc_ref: vpcRef } : {}),
 			};
 		}
+		case "aws_dynamodb_table": {
+			return {
+				hash_key: config.hashKey,
+				hash_key_type: config.hashKeyType,
+				...(typeof config.rangeKey === "string" && config.rangeKey.length > 0
+					? { range_key: config.rangeKey, range_key_type: config.rangeKeyType }
+					: {}),
+				billing_mode: config.billingMode,
+			};
+		}
+		case "aws_rds": {
+			const subnetRefs = nodeRefs.get(nodeId)?.subnets ?? [];
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
+			return {
+				engine: config.engine,
+				...(typeof config.engineVersion === "string" &&
+				config.engineVersion.length > 0
+					? { engine_version: config.engineVersion }
+					: {}),
+				instance_class: config.instanceClass,
+				allocated_storage_gb: config.allocatedStorageGb,
+				db_name: config.dbName,
+				username: config.username,
+				publicly_accessible: config.publiclyAccessible,
+				skip_final_snapshot: config.skipFinalSnapshot,
+				subnet_refs: subnetRefs,
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
 		default:
 			return {};
 	}

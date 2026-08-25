@@ -7,13 +7,17 @@ import type { InfrastructureGraph } from "./schema";
  *   ec2 → security_group    (instance receives vpc_security_group_ids)
  *   subnet → vpc            (subnet receives vpc_id)
  *   security_group → vpc    (direct parent, optional when inheritable)
+ *   rds → subnet(s)         (db receives a synthesized subnet group)
+ *   rds → security_group    (db receives vpc_security_group_ids)
  */
 export interface NodeRefs {
 	/** Parent VPC id discovered from outgoing edges (subnet, or direct sg→vpc). */
 	vpc?: string;
-	/** Subnet this consumer points at (ec2). */
+	/** Single-subnet consumers (ec2): last ec2→subnet edge wins. */
 	subnet?: string;
-	/** Security groups this consumer points at (ec2). */
+	/** All subnets this consumer points at (ec2, rds). */
+	subnets: string[];
+	/** Security groups this consumer points at (ec2, rds). */
 	securityGroups: string[];
 	/** Instances attached to this security group via ec2→sg edges (sg). */
 	attachedInstances: string[];
@@ -32,6 +36,7 @@ export function resolveNodeRefs(
 	const refs = new Map<string, NodeRefs>();
 	for (const node of graph.nodes) {
 		refs.set(node.id, {
+			subnets: [],
 			securityGroups: [],
 			attachedInstances: [],
 		});
@@ -44,10 +49,15 @@ export function resolveNodeRefs(
 		const sourceRefs = refs.get(edge.source);
 		if (!sourceRefs) continue;
 
-		if (sourceType === "aws_ec2" && targetType === "aws_subnet") {
+		if (
+			(sourceType === "aws_ec2" || sourceType === "aws_rds") &&
+			targetType === "aws_subnet"
+		) {
+			if (!sourceRefs.subnets.includes(edge.target))
+				sourceRefs.subnets.push(edge.target);
 			sourceRefs.subnet = edge.target;
 		} else if (
-			sourceType === "aws_ec2" &&
+			(sourceType === "aws_ec2" || sourceType === "aws_rds") &&
 			targetType === "aws_security_group"
 		) {
 			sourceRefs.securityGroups.push(edge.target);
