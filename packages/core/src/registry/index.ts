@@ -1,4 +1,6 @@
+import { dynamoDbResource } from "./resources/dynamodb";
 import { ec2Resource } from "./resources/ec2";
+import { rdsResource } from "./resources/rds";
 import { s3Resource } from "./resources/s3";
 import { securityGroupResource } from "./resources/security-group";
 import { subnetResource } from "./resources/subnet";
@@ -11,6 +13,8 @@ const resources: readonly RegisteredResource[] = [
 	vpcResource,
 	subnetResource,
 	securityGroupResource,
+	dynamoDbResource,
+	rdsResource,
 ];
 
 const byType = new Map<string, RegisteredResource>(
@@ -27,12 +31,26 @@ export function listResourceDefinitions(): RegisteredResource[] {
 	return [...byType.values()];
 }
 
+export type { DynamoDbConfig } from "./resources/dynamodb";
+export {
+	DYNAMODB_BILLING_MODES,
+	DYNAMODB_KEY_TYPES,
+	dynamoDbConfigSchema,
+	dynamoDbResource,
+} from "./resources/dynamodb";
 export type { Ec2Config } from "./resources/ec2";
 export {
 	EC2_INSTANCE_TYPES,
 	ec2ConfigSchema,
 	ec2Resource,
 } from "./resources/ec2";
+export type { RdsConfig } from "./resources/rds";
+export {
+	RDS_ENGINES,
+	RDS_INSTANCE_CLASSES,
+	rdsConfigSchema,
+	rdsResource,
+} from "./resources/rds";
 export type { S3Config } from "./resources/s3";
 export { s3ConfigSchema, s3Resource } from "./resources/s3";
 export type {
