@@ -68,7 +68,7 @@ describe("validateGraph", () => {
 
 	test("rejects unknown resource types", () => {
 		const graph = validGraph();
-		graph.nodes.push({ id: "db-1", type: "aws_rds", config: {} });
+		graph.nodes.push({ id: "db-1", type: "aws_redshift", config: {} });
 		const result = validateGraph(graph);
 		expect(result.valid).toBe(false);
 		expect(result.issues.some((i) => i.code === "UNKNOWN_RESOURCE_TYPE")).toBe(
@@ -261,6 +261,110 @@ describe("cidr", () => {
 		expect(cidrContains("10.0.0.0/16", "192.168.1.0/24")).toBe(false);
 		expect(cidrContains("10.0.0.0/16", "10.0.0.0/8")).toBe(false);
 		expect(cidrContains("10.0.1.5/24", "10.0.1.128/25")).toBe(true);
+	});
+});
+
+describe("data tier resources", () => {
+	function dataGraph(): InfrastructureGraph {
+		return {
+			version: 1,
+			name: "data",
+			nodes: [
+				{ id: "vpc-1", type: "aws_vpc", config: { cidrBlock: "10.0.0.0/16" } },
+				{
+					id: "subnet-1",
+					type: "aws_subnet",
+					config: { cidrBlock: "10.0.1.0/24" },
+				},
+				{
+					id: "subnet-2",
+					type: "aws_subnet",
+					config: { cidrBlock: "10.0.2.0/24" },
+				},
+				{ id: "sg-1", type: "aws_security_group", config: {} },
+				{
+					id: "db-1",
+					type: "aws_rds",
+					config: {},
+				},
+				{
+					id: "kv-1",
+					type: "aws_dynamodb_table",
+					config: { rangeKey: "sk" },
+				},
+			],
+			edges: [
+				{ source: "subnet-1", target: "vpc-1" },
+				{ source: "subnet-2", target: "vpc-1" },
+				{ source: "sg-1", target: "vpc-1" },
+				{ source: "db-1", target: "subnet-1" },
+				{ source: "db-1", target: "subnet-2" },
+				{ source: "db-1", target: "sg-1" },
+			],
+		};
+	}
+
+	test("accepts rds wired to two subnets + sg and standalone dynamodb", () => {
+		const result = validateGraph(dataGraph());
+		expect(result.valid).toBe(true);
+		expect(result.issues).toHaveLength(0);
+	});
+
+	test("flags rds with fewer than two subnets", () => {
+		const graph = dataGraph();
+		graph.edges = graph.edges.filter(
+			(e) => !(e.source === "db-1" && e.target === "subnet-2"),
+		);
+		const result = validateGraph(graph);
+		expect(result.issues.some((i) => i.code === "RDS_SUBNET_COUNT")).toBe(true);
+	});
+
+	test("injects plural subnet refs and sg refs into rds IR", () => {
+		const built = buildIR(dataGraph());
+		if (!built.ok) throw new Error(JSON.stringify(built.issues));
+		const db = built.document.resources.find((r) => r.irId === "db-1");
+		expect(db?.attributes.subnet_refs).toEqual(["subnet-1", "subnet-2"]);
+		expect(db?.attributes.security_group_refs).toEqual(["sg-1"]);
+		expect(db?.attributes.engine).toBe("postgres");
+		expect(db?.attributes.manage_master_user_password).toBeUndefined();
+	});
+
+	test("compiles dynamodb table with hash and range attributes", () => {
+		const built = buildIR(dataGraph());
+		if (!built.ok) throw new Error("expected valid build");
+		const files = compileIR(built.document, { bucketNameSuffix: "abc123" });
+		const main = files.find((f) => f.path === "main.tf")?.contents ?? "";
+
+		expect(main).toContain('resource "aws_dynamodb_table" "kv-1"');
+		expect(main).toContain('name         = "cloudman-kv-1-abc123"');
+		expect(main).toContain('hash_key     = "id"');
+		expect(main).toContain('name = "sk"');
+		expect(main).toContain('type = "S"');
+		expect(main).toContain('billing_mode = "PAY_PER_REQUEST"');
+	});
+
+	test("synthesizes db subnet group and wires the instance to it", () => {
+		const built = buildIR(dataGraph());
+		if (!built.ok) throw new Error("expected valid build");
+		const files = compileIR(built.document, { bucketNameSuffix: "abc123" });
+		const main = files.find((f) => f.path === "main.tf")?.contents ?? "";
+
+		expect(main).toContain('resource "aws_db_subnet_group" "db-1-subnets"');
+		expect(main).toContain(
+			"subnet_ids = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]",
+		);
+		expect(main).toContain('resource "aws_db_instance" "db-1"');
+		expect(main).toContain("manage_master_user_password = true");
+		expect(main).toContain(
+			"db_subnet_group_name = aws_db_subnet_group.db-1-subnets.name",
+		);
+		expect(main).toContain(
+			"vpc_security_group_ids = [aws_security_group.sg-1.id]",
+		);
+
+		const outputs = files.find((f) => f.path === "outputs.tf")?.contents ?? "";
+		expect(outputs).toContain('output "db-1_db_id"');
+		expect(outputs).toContain('output "kv-1_table_id"');
 	});
 });
 

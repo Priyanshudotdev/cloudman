@@ -44,6 +44,10 @@ function outputAttrName(kind: string): string {
 			return "subnet_id";
 		case "aws_security_group":
 			return "security_group_id";
+		case "aws_dynamodb_table":
+			return "table_id";
+		case "aws_db_instance":
+			return "db_id";
 		default:
 			return "id";
 	}
@@ -269,6 +273,150 @@ function writeS3(
 	}
 }
 
+function writeDynamoDb(
+	writer: HclWriter,
+	resource: IRResource,
+	addressById: Map<string, string>,
+	options: CompileOptions,
+): void {
+	const suffix = options.bucketNameSuffix ?? "change-me";
+	const tableName = `cloudman-${resource.name}-${suffix}`.slice(0, 255);
+
+	writer.block(`resource "aws_dynamodb_table" "${resource.name}"`, () => {
+		writer.line(`name         = ${hclString(tableName)}`);
+		writer.line(`hash_key     = ${hclValue(resource.attributes.hash_key)}`);
+		if (resource.attributes.billing_mode === "PROVISIONED") {
+			writer.line('billing_mode = "PROVISIONED"');
+			writer.line("read_capacity  = 5");
+			writer.line("write_capacity = 5");
+		} else {
+			writer.line('billing_mode = "PAY_PER_REQUEST"');
+		}
+
+		const hashType =
+			typeof resource.attributes.hash_key_type === "string"
+				? resource.attributes.hash_key_type
+				: "S";
+		writer.blank();
+		writer.block("attribute", () => {
+			writer.line(`name = ${hclValue(resource.attributes.hash_key)}`);
+			writer.line(`type = ${hclString(hashType)}`);
+		});
+
+		if (
+			typeof resource.attributes.range_key === "string" &&
+			resource.attributes.range_key.length > 0
+		) {
+			const rangeKeyName: string = resource.attributes.range_key;
+			const rangeType =
+				typeof resource.attributes.range_key_type === "string"
+					? resource.attributes.range_key_type
+					: "S";
+			writer.blank();
+			writer.block("attribute", () => {
+				writer.line(`name = ${hclString(rangeKeyName)}`);
+				writer.line(`type = ${hclString(rangeType)}`);
+			});
+		}
+
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
+}
+
+/**
+ * Emits the db instance plus a synthesized aws_db_subnet_group built from
+ * every subnet the consumer wired to it — users never manage the group node.
+ */
+function writeRds(
+	writer: HclWriter,
+	resource: IRResource,
+	addressById: Map<string, string>,
+	options: CompileOptions,
+): void {
+	const suffix = options.bucketNameSuffix ?? "change-me";
+
+	const subnetRefs = resource.attributes.subnet_refs;
+	const subnetIds =
+		Array.isArray(subnetRefs) &&
+		subnetRefs.every((ref): ref is string => typeof ref === "string")
+			? subnetRefs.map((ref) => refAddress(addressById, ref))
+			: [];
+	if (subnetIds.length > 0) {
+		writer.block(
+			`resource "aws_db_subnet_group" "${resource.name}-subnets"`,
+			() => {
+				writer.line(
+					`name       = ${hclString(`cloudman-${resource.name}-${suffix}`.slice(0, 255))}`,
+				);
+				writer.line(`subnet_ids = [${subnetIds.join(", ")}]`);
+				writeTags(writer, `${resource.label ?? resource.name} subnets`);
+			},
+		);
+		writer.blank();
+	}
+
+	writer.block(`resource "aws_db_instance" "${resource.name}"`, () => {
+		writer.line(
+			`identifier     = ${hclString(`cloudman-${resource.name}-${suffix}`.slice(0, 63))}`,
+		);
+		writer.line(`engine         = ${hclValue(resource.attributes.engine)}`);
+		const engineVersion = resource.attributes.engine_version;
+		if (typeof engineVersion === "string")
+			writer.line(`engine_version = ${hclString(engineVersion)}`);
+		writer.line(
+			`instance_class = ${hclValue(resource.attributes.instance_class)}`,
+		);
+		writer.line(
+			`allocated_storage = ${hclValue(resource.attributes.allocated_storage_gb)}`,
+		);
+		writer.line(`db_name        = ${hclValue(resource.attributes.db_name)}`);
+		writer.line(`username       = ${hclValue(resource.attributes.username)}`);
+		writer.line("manage_master_user_password = true");
+		if (typeof resource.attributes.publicly_accessible === "boolean")
+			writer.line(
+				`publicly_accessible = ${resource.attributes.publicly_accessible}`,
+			);
+
+		if (subnetIds.length > 0) {
+			writer.line(
+				`db_subnet_group_name = aws_db_subnet_group.${resource.name}-subnets.name`,
+			);
+		}
+
+		const sgRefs = resource.attributes.security_group_refs;
+		if (
+			Array.isArray(sgRefs) &&
+			sgRefs.every((ref): ref is string => typeof ref === "string") &&
+			sgRefs.length > 0
+		) {
+			writer.line(
+				`vpc_security_group_ids = [${sgRefs.map((ref) => refAddress(addressById, ref)).join(", ")}]`,
+			);
+		}
+
+		if (resource.attributes.skip_final_snapshot !== false) {
+			writer.line("skip_final_snapshot = true");
+		} else {
+			writer.line("skip_final_snapshot = false");
+			writer.line(
+				`final_snapshot_identifier = ${hclString(`cloudman-${resource.name}-${suffix}-final`)}`,
+			);
+		}
+
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
+}
+
 export function compileIR(
 	document: IRDocument,
 	options: CompileOptions = {},
@@ -299,6 +447,10 @@ export function compileIR(
 			writeSubnet(main, resource, addressById);
 		} else if (resource.kind === "aws_security_group") {
 			writeSecurityGroup(main, resource, addressById);
+		} else if (resource.kind === "aws_dynamodb_table") {
+			writeDynamoDb(main, resource, addressById, options);
+		} else if (resource.kind === "aws_db_instance") {
+			writeRds(main, resource, addressById, options);
 		}
 	});
 
