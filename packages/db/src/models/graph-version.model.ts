@@ -10,7 +10,8 @@ const graphVersionSchema = new Schema(
 		version: { type: Number, required: true, min: 1 },
 		/** Raw CloudMan infrastructure graph JSON (nodes/edges/config). */
 		graph: { type: Schema.Types.Mixed, required: true },
-		createdByUserId: { type: ObjectId, ref: "User" },
+		/** better-auth emits fractional ids ("user_..."); store as plain strings. */
+		createdByUserId: { type: String },
 		createdAt: { type: Date, required: true, default: Date.now },
 	},
 	{ collection: "graph_versions" },

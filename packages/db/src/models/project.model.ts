@@ -8,7 +8,8 @@ const projectSchema = new Schema(
 		_id: { type: ObjectId, auto: true },
 		name: { type: String, required: true, minlength: 1, maxlength: 120 },
 		description: { type: String, default: "" },
-		ownerUserId: { type: ObjectId, ref: "User", required: true },
+		/** better-auth emits fractional ids ("user_..."); store as plain strings. */
+		ownerUserId: { type: String, required: true, index: true },
 		latestGraphVersion: { type: Number, required: true, default: 0 },
 		createdAt: { type: Date, required: true, default: Date.now },
 		updatedAt: { type: Date, required: true, default: Date.now },
