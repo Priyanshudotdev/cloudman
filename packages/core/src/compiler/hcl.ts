@@ -10,6 +10,15 @@ export function hclString(value: string): string {
 	return JSON.stringify(value).replace(/\$\{/g, "$${");
 }
 
+/**
+ * Quotes a string while PRESERVING `${...}` interpolation sequences so
+ * resource references can be embedded (e.g. integration URIs). Only use when
+ * the embedded expressions are statically known to be safe.
+ */
+export function hclInterpString(value: string): string {
+	return JSON.stringify(value);
+}
+
 export function hclValue(value: unknown): string {
 	if (typeof value === "string") return hclString(value);
 	if (typeof value === "number" || typeof value === "boolean")
