@@ -139,7 +139,9 @@ export function validateGraph(input: unknown): GraphValidationResult {
 }
 
 /** Resolves + applies defaults to a node's config, tolerating invalid configs. */
-function resolvedConfigOf(node: GraphNode): Record<string, unknown> | undefined {
+function resolvedConfigOf(
+	node: GraphNode,
+): Record<string, unknown> | undefined {
 	const definition = getResourceDefinition(node.type);
 	if (!definition) return undefined;
 	try {
@@ -331,6 +333,16 @@ function validateNetworking(
 			}
 		}
 
+		if (node.type === "aws_elasticache") {
+			if ((nodeRefs.get(nodeId)?.subnets.length ?? 0) === 0) {
+				issues.push({
+					code: "ELASTICACHE_NO_SUBNETS",
+					message: `ElastiCache cluster "${nodeId}" must be connected to at least one subnet`,
+					path: { kind: "node", id: nodeId },
+				});
+			}
+		}
+
 		if (node.type === "aws_aurora") {
 			const subnetCount = nodeRefs.get(nodeId)?.subnets.length ?? 0;
 			if (subnetCount < 2) {
@@ -353,7 +365,10 @@ function validateNetworking(
 			}
 			const config = configOf(nodeId);
 			if (config?.codeSource === "zip") {
-				if (!stringValue(config, "s3CodeBucket") || !stringValue(config, "s3CodeKey")) {
+				if (
+					!stringValue(config, "s3CodeBucket") ||
+					!stringValue(config, "s3CodeKey")
+				) {
 					issues.push({
 						code: "LAMBDA_NO_ZIP_SOURCE",
 						message: `lambda "${nodeId}" in zip mode needs an s3CodeBucket and s3CodeKey`,
@@ -386,7 +401,10 @@ function validateNetworking(
 				});
 			}
 			const config = configOf(nodeId);
-			if ((refs?.repositories.length ?? 0) === 0 && !stringValue(config ?? {}, "image")) {
+			if (
+				(refs?.repositories.length ?? 0) === 0 &&
+				!stringValue(config ?? {}, "image")
+			) {
 				issues.push({
 					code: "ECS_NO_IMAGE",
 					message: `ECS service "${nodeId}" must be connected to an ECR repository or set an image`,

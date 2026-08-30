@@ -406,9 +406,7 @@ function mapAttributes(
 				stage_name: config.stageName,
 				route_path: config.routePath,
 				http_method: config.httpMethod,
-				...(lambdaRefs.length > 0
-					? { lambda_refs: lambdaRefs }
-					: {}),
+				...(lambdaRefs.length > 0 ? { lambda_refs: lambdaRefs } : {}),
 			};
 		}
 		default:

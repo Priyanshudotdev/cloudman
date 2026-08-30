@@ -1,5 +1,5 @@
 import type { IRDocument, IRResource } from "../ir/schema";
-import { hclInterpString, HclWriter, hclString, hclValue } from "./hcl";
+import { HclWriter, hclInterpString, hclString, hclValue } from "./hcl";
 
 export interface CompiledFile {
 	path: string;
@@ -450,21 +450,18 @@ function writeInternetGateway(
 	resource: IRResource,
 	ctx: CompileContext,
 ): void {
-	writer.block(
-		`resource "aws_internet_gateway" "${resource.name}"`,
-		() => {
-			const vpcRef = resource.attributes.vpc_ref;
-			if (typeof vpcRef === "string") {
-				writer.line(`vpc_id = ${refAddress(ctx.addressById, vpcRef)}`);
-			}
-			writeTags(writer, resource.label ?? resource.name);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
-			}
-		},
-	);
+	writer.block(`resource "aws_internet_gateway" "${resource.name}"`, () => {
+		const vpcRef = resource.attributes.vpc_ref;
+		if (typeof vpcRef === "string") {
+			writer.line(`vpc_id = ${refAddress(ctx.addressById, vpcRef)}`);
+		}
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 }
 
 function writeNatGateway(
@@ -478,13 +475,10 @@ function writeNatGateway(
 			: "public";
 
 	if (connectivity === "public") {
-		writer.block(
-			`resource "aws_eip" "${resource.name}-eip"`,
-			() => {
-				writer.line('domain = "vpc"');
-				writeTags(writer, `${resource.label ?? resource.name} eip`);
-			},
-		);
+		writer.block(`resource "aws_eip" "${resource.name}-eip"`, () => {
+			writer.line('domain = "vpc"');
+			writeTags(writer, `${resource.label ?? resource.name} eip`);
+		});
 		writer.blank();
 	}
 
@@ -495,9 +489,7 @@ function writeNatGateway(
 		}
 		writer.line(`connectivity_type = ${hclString(connectivity)}`);
 		if (connectivity === "public") {
-			writer.line(
-				`allocation_id = aws_eip.${resource.name}-eip.id`,
-			);
+			writer.line(`allocation_id = aws_eip.${resource.name}-eip.id`);
 		}
 		writeTags(writer, resource.label ?? resource.name);
 		const deps = dependencyAddresses(resource, ctx.addressById);
@@ -516,7 +508,9 @@ function writeAlb(
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
 
 	writer.block(`resource "aws_lb" "${resource.name}"`, () => {
-		writer.line(`name               = ${hclString(`cloudman-${resource.name}-${suffix}`.slice(0, 32))}`);
+		writer.line(
+			`name               = ${hclString(`cloudman-${resource.name}-${suffix}`.slice(0, 32))}`,
+		);
 		writer.line('load_balancer_type = "application"');
 		if (typeof resource.attributes.internal === "boolean") {
 			writer.line(`internal           = ${resource.attributes.internal}`);
@@ -555,11 +549,11 @@ function writeAlb(
 
 	const tgName = `${resource.name}-tg`;
 	writer.block(`resource "aws_lb_target_group" "${tgName}"`, () => {
-		writer.line(`name     = ${hclString(`cloudman-${tgName}-${suffix}`.slice(0, 32))}`);
-		const port = resource.attributes.listener_port;
 		writer.line(
-			`port     = ${typeof port === "number" ? port : 80}`,
+			`name     = ${hclString(`cloudman-${tgName}-${suffix}`.slice(0, 32))}`,
 		);
+		const port = resource.attributes.listener_port;
+		writer.line(`port     = ${typeof port === "number" ? port : 80}`);
 		const protocol = resource.attributes.listener_protocol;
 		writer.line(
 			`protocol = ${hclString(typeof protocol === "string" ? protocol : "HTTP")}`,
@@ -586,7 +580,9 @@ function writeAlb(
 	const listenerName = `${resource.name}-listener`;
 	writer.block(`resource "aws_lb_listener" "${listenerName}"`, () => {
 		writer.line(`load_balancer_arn = aws_lb.${resource.name}.arn`);
-		writer.line(`port = ${typeof resource.attributes.listener_port === "number" ? resource.attributes.listener_port : 80}`);
+		writer.line(
+			`port = ${typeof resource.attributes.listener_port === "number" ? resource.attributes.listener_port : 80}`,
+		);
 		writer.line(
 			`protocol = ${hclString(typeof resource.attributes.listener_protocol === "string" ? resource.attributes.listener_protocol : "HTTP")}`,
 		);
@@ -609,9 +605,7 @@ function writeAlb(
 			writer.block(
 				`resource "aws_lb_target_group_attachment" "${resource.name}-target-${index + 1}"`,
 				() => {
-					writer.line(
-						`target_group_arn = aws_lb_target_group.${tgName}.arn`,
-					);
+					writer.line(`target_group_arn = aws_lb_target_group.${tgName}.arn`);
 					writer.line(
 						`target_id        = ${refAddress(ctx.addressById, target)}`,
 					);
@@ -628,8 +622,7 @@ function writeEcr(
 	ctx: CompileContext,
 ): void {
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
-	const repoName =
-		`cloudman-${resource.name}-${suffix}`.slice(0, 255);
+	const repoName = `cloudman-${resource.name}-${suffix}`.slice(0, 255);
 
 	writer.block(`resource "aws_ecr_repository" "${resource.name}"`, () => {
 		writer.line(`name                 = ${hclString(repoName)}`);
@@ -657,8 +650,7 @@ function writeLambda(
 	ctx: CompileContext,
 ): void {
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
-	const fnName =
-		`cloudman-${resource.name}-${suffix}`.slice(0, 64);
+	const fnName = `cloudman-${resource.name}-${suffix}`.slice(0, 64);
 	const codeSource =
 		typeof resource.attributes.code_source === "string"
 			? resource.attributes.code_source
@@ -668,7 +660,9 @@ function writeLambda(
 		writer.line(`function_name = ${hclString(fnName)}`);
 		const roleRef = resource.attributes.iam_role_ref;
 		if (typeof roleRef === "string") {
-			writer.line(`role          = ${refAttr(ctx.addressById, roleRef, "arn")}`);
+			writer.line(
+				`role          = ${refAttr(ctx.addressById, roleRef, "arn")}`,
+			);
 		}
 		writer.line(
 			`memory_size   = ${typeof resource.attributes.memory_size === "number" ? resource.attributes.memory_size : 128}`,
@@ -770,10 +764,18 @@ function writeEcs(
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
 	const base = resource.name;
 	const cpu = hclString(
-		ECS_CPU_VALUES[typeof resource.attributes.cpu === "string" ? resource.attributes.cpu : "0.25 vCPU"] ?? "256",
+		ECS_CPU_VALUES[
+			typeof resource.attributes.cpu === "string"
+				? resource.attributes.cpu
+				: "0.25 vCPU"
+		] ?? "256",
 	);
 	const memory = hclString(
-		ECS_MEMORY_VALUES[typeof resource.attributes.memory === "string" ? resource.attributes.memory : "0.5 GB"] ?? "512",
+		ECS_MEMORY_VALUES[
+			typeof resource.attributes.memory === "string"
+				? resource.attributes.memory
+				: "0.5 GB"
+		] ?? "512",
 	);
 	const containerPort =
 		typeof resource.attributes.container_port === "number"
@@ -781,14 +783,17 @@ function writeEcs(
 			: 80;
 
 	writer.block(`resource "aws_ecs_cluster" "${resource.name}-cluster"`, () => {
-		writer.line(`name = ${hclString(`cloudman-${base}-${suffix}`.slice(0, 255))}`);
+		writer.line(
+			`name = ${hclString(`cloudman-${base}-${suffix}`.slice(0, 255))}`,
+		);
 		writeTags(writer, `${resource.label ?? resource.name} cluster`);
 	});
 	writer.blank();
 
-	const imageOverride = typeof resource.attributes.image === "string"
-		? resource.attributes.image
-		: undefined;
+	const imageOverride =
+		typeof resource.attributes.image === "string"
+			? resource.attributes.image
+			: undefined;
 	const repositoryRefs =
 		Array.isArray(resource.attributes.repository_refs) &&
 		resource.attributes.repository_refs.every(
@@ -804,9 +809,11 @@ function writeEcs(
 	writer.block(
 		`resource "aws_ecs_task_definition" "${resource.name}-task"`,
 		() => {
-			writer.line(`family = ${hclString(`cloudman-${base}-${suffix}`.slice(0, 255))}`);
+			writer.line(
+				`family = ${hclString(`cloudman-${base}-${suffix}`.slice(0, 255))}`,
+			);
 			writer.line('network_mode             = "awsvpc"');
-			writer.line("requires_compatibilities = [\"FARGATE\"]");
+			writer.line('requires_compatibilities = ["FARGATE"]');
 			writer.line(`cpu                      = ${cpu}`);
 			writer.line(`memory                   = ${memory}`);
 			const roleRef = resource.attributes.iam_role_ref;
@@ -857,56 +864,55 @@ function writeEcs(
 	);
 	writer.blank();
 
-	writer.block(
-		`resource "aws_ecs_service" "${resource.name}-service"`,
-		() => {
-			writer.line(`name            = ${hclString(`cloudman-${base}-${suffix}-svc`.slice(0, 255))}`);
+	writer.block(`resource "aws_ecs_service" "${resource.name}-service"`, () => {
+		writer.line(
+			`name            = ${hclString(`cloudman-${base}-${suffix}-svc`.slice(0, 255))}`,
+		);
+		writer.line(
+			`cluster         = aws_ecs_cluster.${resource.name}-cluster.id`,
+		);
+		writer.line(
+			`task_definition = aws_ecs_task_definition.${resource.name}-task.arn`,
+		);
+		writer.line(
+			`desired_count   = ${typeof resource.attributes.desired_count === "number" ? resource.attributes.desired_count : 1}`,
+		);
+		writer.line('launch_type     = "FARGATE"');
+		writer.blank();
+		writer.block("network_configuration", () => {
+			const subnetRefs =
+				Array.isArray(resource.attributes.subnet_refs) &&
+				resource.attributes.subnet_refs.every(
+					(ref): ref is string => typeof ref === "string",
+				)
+					? resource.attributes.subnet_refs
+					: [];
 			writer.line(
-				`cluster         = aws_ecs_cluster.${resource.name}-cluster.id`,
+				`subnets          = [${subnetRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
 			);
-			writer.line(
-				`task_definition = aws_ecs_task_definition.${resource.name}-task.arn`,
-			);
-			writer.line(
-				`desired_count   = ${typeof resource.attributes.desired_count === "number" ? resource.attributes.desired_count : 1}`,
-			);
-			writer.line('launch_type     = "FARGATE"');
-			writer.blank();
-			writer.block("network_configuration", () => {
-				const subnetRefs =
-					Array.isArray(resource.attributes.subnet_refs) &&
-					resource.attributes.subnet_refs.every(
-						(ref): ref is string => typeof ref === "string",
-					)
-						? resource.attributes.subnet_refs
-						: [];
+			const sgRefs =
+				Array.isArray(resource.attributes.security_group_refs) &&
+				resource.attributes.security_group_refs.every(
+					(ref): ref is string => typeof ref === "string",
+				)
+					? resource.attributes.security_group_refs
+					: [];
+			if (sgRefs.length > 0) {
 				writer.line(
-					`subnets          = [${subnetRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
+					`security_groups  = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
 				);
-				const sgRefs =
-					Array.isArray(resource.attributes.security_group_refs) &&
-					resource.attributes.security_group_refs.every(
-						(ref): ref is string => typeof ref === "string",
-					)
-						? resource.attributes.security_group_refs
-						: [];
-				if (sgRefs.length > 0) {
-					writer.line(
-						`security_groups  = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
-					);
-				}
-				writer.line(
-					`assign_public_ip = ${resource.attributes.assign_public_ip === true}`,
-				);
-			});
-			writeTags(writer, `${resource.label ?? resource.name} service`);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
 			}
-		},
-	);
+			writer.line(
+				`assign_public_ip = ${resource.attributes.assign_public_ip === true}`,
+			);
+		});
+		writeTags(writer, `${resource.label ?? resource.name} service`);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 }
 
 function writeEbs(
@@ -949,12 +955,12 @@ function writeEbs(
 			writer.line(`volume_id   = aws_ebs_volume.${resource.name}.id`);
 			const instanceRef = resource.attributes.instance_ref;
 			if (typeof instanceRef === "string") {
-				writer.line(`instance_id = ${refAddress(ctx.addressById, instanceRef)}`);
+				writer.line(
+					`instance_id = ${refAddress(ctx.addressById, instanceRef)}`,
+				);
 			}
 			writer.blank();
-			writer.line(
-				`depends_on = [aws_ebs_volume.${resource.name}]`,
-			);
+			writer.line(`depends_on = [aws_ebs_volume.${resource.name}]`);
 		},
 	);
 }
@@ -964,24 +970,23 @@ function writeEfs(
 	resource: IRResource,
 	ctx: CompileContext,
 ): void {
-	writer.block(
-		`resource "aws_efs_file_system" "${resource.name}"`,
-		() => {
-			writer.line(
-				`performance_mode = ${hclString(typeof resource.attributes.performance_mode === "string" ? resource.attributes.performance_mode : "generalPurpose")}`,
-			);
-			writer.line(
-				`throughput_mode  = ${hclString(typeof resource.attributes.throughput_mode === "string" ? resource.attributes.throughput_mode : "elastic")}`,
-			);
-			writer.line(`encrypted        = ${resource.attributes.encrypted !== false}`);
-			writeTags(writer, resource.label ?? resource.name);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
-			}
-		},
-	);
+	writer.block(`resource "aws_efs_file_system" "${resource.name}"`, () => {
+		writer.line(
+			`performance_mode = ${hclString(typeof resource.attributes.performance_mode === "string" ? resource.attributes.performance_mode : "generalPurpose")}`,
+		);
+		writer.line(
+			`throughput_mode  = ${hclString(typeof resource.attributes.throughput_mode === "string" ? resource.attributes.throughput_mode : "elastic")}`,
+		);
+		writer.line(
+			`encrypted        = ${resource.attributes.encrypted !== false}`,
+		);
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 
 	const subnetRefs =
 		Array.isArray(resource.attributes.subnet_refs) &&
@@ -1005,9 +1010,7 @@ function writeEfs(
 				writer.line(
 					`file_system_id  = aws_efs_file_system.${resource.name}.id`,
 				);
-				writer.line(
-					`subnet_id       = ${refAddress(ctx.addressById, subnet)}`,
-				);
+				writer.line(`subnet_id       = ${refAddress(ctx.addressById, subnet)}`);
 				if (sgRefs.length > 0) {
 					writer.line(
 						`security_groups = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
@@ -1101,9 +1104,7 @@ function writeAurora(
 			writer.line(
 				`identifier         = ${hclString(`${base}-instance-${suffix}`.slice(0, 63))}`,
 			);
-			writer.line(
-				`cluster_identifier = aws_rds_cluster.${resource.name}.id`,
-			);
+			writer.line(`cluster_identifier = aws_rds_cluster.${resource.name}.id`);
 			writer.line(
 				`instance_class     = ${hclString(typeof resource.attributes.instance_class === "string" ? resource.attributes.instance_class : "db.t4g.medium")}`,
 			);
@@ -1146,53 +1147,50 @@ function writeElasticache(
 		writer.blank();
 	}
 
-	writer.block(
-		`resource "aws_elasticache_cluster" "${resource.name}"`,
-		() => {
+	writer.block(`resource "aws_elasticache_cluster" "${resource.name}"`, () => {
+		writer.line(
+			`cluster_id           = ${hclString(`${base}-${suffix}`.slice(0, 50))}`,
+		);
+		writer.line(
+			`engine               = ${hclString(typeof resource.attributes.engine === "string" ? resource.attributes.engine : "redis")}`,
+		);
+		writer.line(
+			`node_type            = ${hclString(typeof resource.attributes.node_type === "string" ? resource.attributes.node_type : "cache.t3.micro")}`,
+		);
+		writer.line(
+			`num_cache_nodes      = ${typeof resource.attributes.num_cache_nodes === "number" ? resource.attributes.num_cache_nodes : 1}`,
+		);
+		writer.line(
+			`port                 = ${typeof resource.attributes.port === "number" ? resource.attributes.port : 6379}`,
+		);
+		const paramGroup = resource.attributes.parameter_group_name;
+		if (typeof paramGroup === "string") {
+			writer.line(`parameter_group_name = ${hclString(paramGroup)}`);
+		}
+		const sgRefs =
+			Array.isArray(resource.attributes.security_group_refs) &&
+			resource.attributes.security_group_refs.every(
+				(ref): ref is string => typeof ref === "string",
+			)
+				? resource.attributes.security_group_refs
+				: [];
+		if (sgRefs.length > 0) {
 			writer.line(
-				`cluster_id           = ${hclString(`${base}-${suffix}`.slice(0, 50))}`,
+				`security_group_ids   = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
 			);
+		}
+		if (subnetRefs.length > 0) {
 			writer.line(
-				`engine               = ${hclString(typeof resource.attributes.engine === "string" ? resource.attributes.engine : "redis")}`,
+				`subnet_group_name    = aws_elasticache_subnet_group.${resource.name}-subnets.name`,
 			);
-			writer.line(
-				`node_type            = ${hclString(typeof resource.attributes.node_type === "string" ? resource.attributes.node_type : "cache.t3.micro")}`,
-			);
-			writer.line(
-				`num_cache_nodes      = ${typeof resource.attributes.num_cache_nodes === "number" ? resource.attributes.num_cache_nodes : 1}`,
-			);
-			writer.line(
-				`port                 = ${typeof resource.attributes.port === "number" ? resource.attributes.port : 6379}`,
-			);
-			const paramGroup = resource.attributes.parameter_group_name;
-			if (typeof paramGroup === "string") {
-				writer.line(`parameter_group_name = ${hclString(paramGroup)}`);
-			}
-			const sgRefs =
-				Array.isArray(resource.attributes.security_group_refs) &&
-				resource.attributes.security_group_refs.every(
-					(ref): ref is string => typeof ref === "string",
-				)
-					? resource.attributes.security_group_refs
-					: [];
-			if (sgRefs.length > 0) {
-				writer.line(
-					`security_group_ids   = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
-				);
-			}
-			if (subnetRefs.length > 0) {
-				writer.line(
-					`subnet_group_name    = aws_elasticache_subnet_group.${resource.name}-subnets.name`,
-				);
-			}
-			writeTags(writer, resource.label ?? resource.name);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
-			}
-		},
-	);
+		}
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 }
 
 const IAM_PRINCIPALS: Record<string, string> = {
@@ -1214,8 +1212,7 @@ function writeIamRole(
 		typeof resource.attributes.assume_service === "string"
 			? resource.attributes.assume_service
 			: "ec2";
-	const principal =
-		IAM_PRINCIPALS[assumeService] ?? "ec2.amazonaws.com";
+	const principal = IAM_PRINCIPALS[assumeService] ?? "ec2.amazonaws.com";
 	const roleName = hclString(
 		(typeof resource.attributes.role_name === "string"
 			? resource.attributes.role_name
@@ -1284,9 +1281,7 @@ function writeIamPolicy(
 
 	writer.block(`resource "aws_iam_policy" "${resource.name}"`, () => {
 		writer.line(`name   = ${policyName}`);
-		writer.line(
-			`policy = ${hclString(JSON.stringify(policyDocument))}`,
-		);
+		writer.line(`policy = ${hclString(JSON.stringify(policyDocument))}`);
 		writeTags(writer, resource.label ?? resource.name);
 		const deps = dependencyAddresses(resource, ctx.addressById);
 		if (deps.length > 0) {
@@ -1307,12 +1302,8 @@ function writeIamPolicy(
 		writer.block(
 			`resource "aws_iam_role_policy_attachment" "${resource.name}-attach-${index + 1}"`,
 			() => {
-				writer.line(
-					`role       = ${refAttr(ctx.addressById, role, "name")}`,
-				);
-				writer.line(
-					`policy_arn = aws_iam_policy.${resource.name}.arn`,
-				);
+				writer.line(`role       = ${refAttr(ctx.addressById, role, "name")}`);
+				writer.line(`policy_arn = aws_iam_policy.${resource.name}.arn`);
 			},
 		);
 	});
@@ -1415,9 +1406,7 @@ function writeRoute53Record(
 	}
 
 	writer.block(`resource "aws_route53_record" "${resource.name}"`, () => {
-		writer.line(
-			`zone_id = ${refAttr(ctx.addressById, zoneRef, "zone_id")}`,
-		);
+		writer.line(`zone_id = ${refAttr(ctx.addressById, zoneRef, "zone_id")}`);
 		const recordName =
 			typeof resource.attributes.record_name === "string"
 				? resource.attributes.record_name
@@ -1474,23 +1463,20 @@ function writeCloudwatchLogGroup(
 	resource: IRResource,
 	ctx: CompileContext,
 ): void {
-	writer.block(
-		`resource "aws_cloudwatch_log_group" "${resource.name}"`,
-		() => {
-			writer.line(
-				`name              = ${hclString(`/cloudman/${resource.name}`)}`,
-			);
-			writer.line(
-				`retention_in_days = ${typeof resource.attributes.retention_days === "number" ? resource.attributes.retention_days : 14}`,
-			);
-			writeTags(writer, resource.label ?? resource.name);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
-			}
-		},
-	);
+	writer.block(`resource "aws_cloudwatch_log_group" "${resource.name}"`, () => {
+		writer.line(
+			`name              = ${hclString(`/cloudman/${resource.name}`)}`,
+		);
+		writer.line(
+			`retention_in_days = ${typeof resource.attributes.retention_days === "number" ? resource.attributes.retention_days : 14}`,
+		);
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
+			writer.blank();
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 }
 
 function writeApiGateway(
@@ -1501,24 +1487,21 @@ function writeApiGateway(
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
 	const base = `cloudman-${resource.name}`;
 
-	writer.block(
-		`resource "aws_api_gateway_rest_api" "${resource.name}"`,
-		() => {
-			writer.line(
-				`name        = ${hclString(`${base}-${suffix}`.slice(0, 255))}`,
-			);
+	writer.block(`resource "aws_api_gateway_rest_api" "${resource.name}"`, () => {
+		writer.line(
+			`name        = ${hclString(`${base}-${suffix}`.slice(0, 255))}`,
+		);
+		writer.blank();
+		writer.block("endpoint_configuration", () => {
+			writer.line('types = ["REGIONAL"]');
+		});
+		writeTags(writer, resource.label ?? resource.name);
+		const deps = dependencyAddresses(resource, ctx.addressById);
+		if (deps.length > 0) {
 			writer.blank();
-			writer.block("endpoint_configuration", () => {
-				writer.line('types = ["REGIONAL"]');
-			});
-			writeTags(writer, resource.label ?? resource.name);
-			const deps = dependencyAddresses(resource, ctx.addressById);
-			if (deps.length > 0) {
-				writer.blank();
-				writer.line(`depends_on = [${deps.join(", ")}]`);
-			}
-		},
-	);
+			writer.line(`depends_on = [${deps.join(", ")}]`);
+		}
+	});
 	writer.blank();
 
 	const routePath =
@@ -1533,9 +1516,7 @@ function writeApiGateway(
 	writer.block(
 		`resource "aws_api_gateway_resource" "${resource.name}-resource"`,
 		() => {
-			writer.line(
-				`rest_api_id = aws_api_gateway_rest_api.${resource.name}.id`,
-			);
+			writer.line(`rest_api_id = aws_api_gateway_rest_api.${resource.name}.id`);
 			writer.line(
 				`parent_id   = aws_api_gateway_rest_api.${resource.name}.root_resource_id`,
 			);
@@ -1566,8 +1547,8 @@ function writeApiGateway(
 		)
 			? resource.attributes.lambda_refs
 			: [];
-	if (lambdaRefs.length > 0) {
-		const lambda = lambdaRefs[0]!;
+	const lambda = lambdaRefs[0];
+	if (lambda !== undefined) {
 		writer.block(
 			`resource "aws_api_gateway_integration" "${resource.name}-integration"`,
 			() => {
@@ -1595,9 +1576,7 @@ function writeApiGateway(
 				writer.line(
 					`function_name = ${refAttr(ctx.addressById, lambda, "arn")}`,
 				);
-				writer.line(
-					`principal     = ${hclString("apigateway.amazonaws.com")}`,
-				);
+				writer.line(`principal     = ${hclString("apigateway.amazonaws.com")}`);
 				writer.line(
 					`source_arn    = ${hclString("arn:aws:execute-api:*:*:*/*")}`,
 				);
@@ -1609,13 +1588,13 @@ function writeApiGateway(
 	writer.block(
 		`resource "aws_api_gateway_deployment" "${resource.name}-deployment"`,
 		() => {
-			writer.line(
-				`rest_api_id = aws_api_gateway_rest_api.${resource.name}.id`,
-			);
-			writer.blank();
-			writer.line(
-				`depends_on = [aws_api_gateway_integration.${resource.name}-integration]`,
-			);
+			writer.line(`rest_api_id = aws_api_gateway_rest_api.${resource.name}.id`);
+			if (lambda !== undefined) {
+				writer.blank();
+				writer.line(
+					`depends_on = [aws_api_gateway_integration.${resource.name}-integration]`,
+				);
+			}
 		},
 	);
 	writer.blank();

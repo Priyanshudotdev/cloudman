@@ -141,10 +141,7 @@ export function resolveNodeRefs(
 			targetType === "aws_alb"
 		) {
 			sourceRefs.albAlias = edge.target;
-		} else if (
-			sourceType === "aws_apigateway" &&
-			targetType === "aws_lambda"
-		) {
+		} else if (sourceType === "aws_apigateway" && targetType === "aws_lambda") {
 			sourceRefs.targetFunctions.push(edge.target);
 		} else if (targetType === "aws_vpc") {
 			// Direct parent: subnet, security group, igw, efs, alb, private zone.
