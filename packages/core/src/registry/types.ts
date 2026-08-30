@@ -1,6 +1,15 @@
 import type { z } from "zod";
 
-export type ResourceCategory = "compute" | "storage" | "network" | "database";
+export type ResourceCategory =
+	| "compute"
+	| "storage"
+	| "network"
+	| "database"
+	| "messaging"
+	| "iam"
+	| "observability"
+	| "dns"
+	| "serverless";
 
 export interface BaseResourceDefinition {
 	readonly type: string;
