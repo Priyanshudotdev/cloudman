@@ -38,6 +38,9 @@ export const env = createEnv({
 			.string()
 			.regex(/^[0-9a-fA-F]{64}$/)
 			.optional(),
+		/** Google OAuth — optional; the Google login button is hidden until set. */
+		GOOGLE_CLIENT_ID: z.string().min(1).optional(),
+		GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
 	},
 	runtimeEnv: runtimeEnv,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,

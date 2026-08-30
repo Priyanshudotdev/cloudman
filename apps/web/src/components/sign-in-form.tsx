@@ -1,3 +1,4 @@
+import { env } from "@my-better-t-app/env/web";
 import { Button } from "@my-better-t-app/ui/components/button";
 import { Input } from "@my-better-t-app/ui/components/input";
 import { Label } from "@my-better-t-app/ui/components/label";
@@ -55,6 +56,29 @@ export default function SignInForm({
 	return (
 		<div className="mx-auto mt-10 w-full max-w-md p-6">
 			<h1 className="mb-6 text-center font-bold text-3xl">Welcome Back</h1>
+
+			{env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" && (
+				<>
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full"
+						onClick={() =>
+							void authClient.signIn.social({
+								provider: "google",
+								callbackURL: "/dashboard",
+							})
+						}
+					>
+						Continue with Google
+					</Button>
+					<div className="my-4 flex items-center gap-2 text-muted-foreground text-xs">
+						<span className="h-px flex-1 bg-border" />
+						or continue with email
+						<span className="h-px flex-1 bg-border" />
+					</div>
+				</>
+			)}
 
 			<form
 				onSubmit={(e) => {
