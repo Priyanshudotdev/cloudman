@@ -2,7 +2,7 @@
 	"extends": "@my-better-t-app/config/tsconfig.base.json",
 	"compilerOptions": {
 		"outDir": "dist",
-		"types": ["node"]
+		"types": ["node", "bun"]
 	},
 	"include": ["src"]
 }
