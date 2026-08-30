@@ -2,7 +2,13 @@ import { z } from "zod";
 
 import { defineResource } from "../types";
 
-export const ROUTE53_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX"] as const;
+export const ROUTE53_RECORD_TYPES = [
+	"A",
+	"AAAA",
+	"CNAME",
+	"TXT",
+	"MX",
+] as const;
 
 export const route53RecordConfigSchema = z.strictObject({
 	recordName: z.string().min(1).max(255),

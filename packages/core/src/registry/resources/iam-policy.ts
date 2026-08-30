@@ -4,10 +4,7 @@ import { defineResource } from "../types";
 
 export const iamPolicyConfigSchema = z.strictObject({
 	name: z.string().min(1).optional(),
-	actions: z
-		.array(z.string().min(1))
-		.max(25)
-		.default(["s3:GetObject"]),
+	actions: z.array(z.string().min(1)).max(25).default(["s3:GetObject"]),
 	resources: z.array(z.string().min(1)).max(25).default(["*"]),
 });
 

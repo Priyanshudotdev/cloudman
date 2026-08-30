@@ -89,9 +89,9 @@ export {
 } from "./resources/aurora";
 export type { CloudwatchLogGroupConfig } from "./resources/cloudwatch-log-group";
 export {
-	LOG_RETENTION_DAYS,
 	cloudwatchLogGroupConfigSchema,
 	cloudwatchLogGroupResource,
+	LOG_RETENTION_DAYS,
 } from "./resources/cloudwatch-log-group";
 export type { DynamoDbConfig } from "./resources/dynamodb";
 export {
@@ -140,7 +140,10 @@ export {
 	elasticacheResource,
 } from "./resources/elasticache";
 export type { IamPolicyConfig } from "./resources/iam-policy";
-export { iamPolicyConfigSchema, iamPolicyResource } from "./resources/iam-policy";
+export {
+	iamPolicyConfigSchema,
+	iamPolicyResource,
+} from "./resources/iam-policy";
 export type { IamRoleConfig } from "./resources/iam-role";
 export {
 	IAM_ASSUME_SERVICES,
