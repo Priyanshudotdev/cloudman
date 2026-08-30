@@ -1,5 +1,5 @@
 import { resolveDependencies } from "../graph/dependencies";
-import { resolveNodeRefs, sgEffectiveVpc } from "../graph/refs";
+import { consumerVpc, resolveNodeRefs, sgEffectiveVpc } from "../graph/refs";
 import type { InfrastructureGraph } from "../graph/schema";
 import { infrastructureGraphSchema } from "../graph/schema";
 import type { ValidationIssue } from "../graph/validate";
@@ -201,6 +201,214 @@ function mapAttributes(
 				skip_final_snapshot: config.skipFinalSnapshot,
 				subnet_refs: subnetRefs,
 				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
+		case "aws_internet_gateway": {
+			const vpcRef = nodeRefs.get(nodeId)?.vpc;
+			return {
+				...(vpcRef ? { vpc_ref: vpcRef } : {}),
+			};
+		}
+		case "aws_nat_gateway": {
+			const subnetRef = nodeRefs.get(nodeId)?.subnet;
+			return {
+				connectivity_type: config.connectivityType,
+				...(subnetRef ? { subnet_ref: subnetRef } : {}),
+			};
+		}
+		case "aws_alb": {
+			const subnetRefs = nodeRefs.get(nodeId)?.subnets ?? [];
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
+			const vpcRef = consumerVpc(nodeId, nodeRefs);
+			return {
+				scheme: config.scheme,
+				listener_port: config.listenerPort,
+				listener_protocol: config.listenerProtocol,
+				health_check_path: config.healthCheckPath,
+				internal: config.scheme === "internal",
+				target_refs: nodeRefs.get(nodeId)?.lbTargets ?? [],
+				subnet_refs: subnetRefs,
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+				...(vpcRef ? { vpc_ref: vpcRef } : {}),
+			};
+		}
+		case "aws_ecr":
+			return {
+				scan_on_push: config.scanOnPush,
+				image_tag_mutability: config.tagMutability,
+			};
+		case "aws_lambda": {
+			const refs = nodeRefs.get(nodeId);
+			const subnetRefs = refs?.subnets ?? [];
+			const sgRefs = refs?.securityGroups ?? [];
+			return {
+				code_source: config.codeSource,
+				runtime: config.runtime,
+				handler: config.handler,
+				memory_size: config.memoryMb,
+				timeout: config.timeoutSec,
+				...(typeof config.s3CodeBucket === "string"
+					? { s3_bucket: config.s3CodeBucket }
+					: {}),
+				...(typeof config.s3CodeKey === "string"
+					? { s3_key: config.s3CodeKey }
+					: {}),
+				...(refs?.iamRole ? { iam_role_ref: refs.iamRole } : {}),
+				...(refs && refs.repositories.length > 0
+					? { repository_refs: refs.repositories }
+					: {}),
+				...(subnetRefs.length > 0 ? { subnet_refs: subnetRefs } : {}),
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
+		case "aws_ecs": {
+			const refs = nodeRefs.get(nodeId);
+			return {
+				cpu: config.cpu,
+				memory: config.memory,
+				container_port: config.containerPort,
+				desired_count: config.desiredCount,
+				image_tag: config.imageTag,
+				assign_public_ip: config.assignPublicIp,
+				...(typeof config.image === "string" && config.image.length > 0
+					? { image: config.image }
+					: {}),
+				...(refs?.iamRole ? { iam_role_ref: refs.iamRole } : {}),
+				...(refs && refs.repositories.length > 0
+					? { repository_refs: refs.repositories }
+					: {}),
+				...(refs && refs.subnets.length > 0
+					? { subnet_refs: refs.subnets }
+					: {}),
+				...(refs && refs.securityGroups.length > 0
+					? { security_group_refs: refs.securityGroups }
+					: {}),
+			};
+		}
+		case "aws_ebs": {
+			const instanceRef = nodeRefs.get(nodeId)?.instanceRef;
+			return {
+				size_gb: config.sizeGb,
+				volume_type: config.type,
+				device: config.device,
+				encrypted: config.encrypted,
+				...(typeof config.iops === "number" ? { iops: config.iops } : {}),
+				...(instanceRef ? { instance_ref: instanceRef } : {}),
+			};
+		}
+		case "aws_efs": {
+			const subnetRefs = nodeRefs.get(nodeId)?.subnets ?? [];
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
+			return {
+				performance_mode: config.performanceMode,
+				throughput_mode: config.throughputMode,
+				encrypted: config.encrypted,
+				subnet_refs: subnetRefs,
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
+		case "aws_aurora": {
+			const subnetRefs = nodeRefs.get(nodeId)?.subnets ?? [];
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
+			return {
+				engine: config.engine,
+				...(typeof config.engineVersion === "string" &&
+				config.engineVersion.length > 0
+					? { engine_version: config.engineVersion }
+					: {}),
+				instance_class: config.instanceClass,
+				db_name: config.dbName,
+				db_username: config.dbUsername,
+				subnet_refs: subnetRefs,
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
+		case "aws_elasticache": {
+			const subnetRefs = nodeRefs.get(nodeId)?.subnets ?? [];
+			const sgRefs = nodeRefs.get(nodeId)?.securityGroups ?? [];
+			const engine = config.engine === "memcached" ? "memcached" : "redis";
+			return {
+				engine,
+				node_type: config.nodeType,
+				num_cache_nodes: config.numCacheNodes,
+				port:
+					typeof config.port === "number"
+						? config.port
+						: engine === "memcached"
+							? 11211
+							: 6379,
+				...(typeof config.parameterGroupName === "string" &&
+				config.parameterGroupName.length > 0
+					? { parameter_group_name: config.parameterGroupName }
+					: engine === "memcached"
+						? { parameter_group_name: "default.memcached1.6" }
+						: { parameter_group_name: "default.redis7" }),
+				subnet_refs: subnetRefs,
+				...(sgRefs.length > 0 ? { security_group_refs: sgRefs } : {}),
+			};
+		}
+		case "aws_iam_role":
+			return {
+				assume_service: config.assumeService,
+				...(typeof config.name === "string" && config.name.length > 0
+					? { role_name: config.name }
+					: {}),
+			};
+		case "aws_iam_policy":
+			return {
+				...(typeof config.name === "string" && config.name.length > 0
+					? { policy_name: config.name }
+					: {}),
+				actions: config.actions,
+				resources: config.resources,
+				role_refs: nodeRefs.get(nodeId)?.roles ?? [],
+			};
+		case "aws_sqs":
+			return {
+				visibility_timeout_seconds: config.visibilityTimeoutSec,
+				delay_seconds: config.delaySeconds,
+				fifo_queue: config.fifo,
+			};
+		case "aws_sns":
+			return {
+				...(typeof config.displayName === "string" &&
+				config.displayName.length > 0
+					? { display_name: config.displayName }
+					: {}),
+			};
+		case "aws_route53_zone": {
+			const vpcRef = nodeRefs.get(nodeId)?.vpc;
+			return {
+				zone_name: config.zoneName,
+				private_zone: config.privateZone,
+				...(vpcRef ? { vpc_ref: vpcRef } : {}),
+			};
+		}
+		case "aws_route53_record": {
+			const zoneRef = nodeRefs.get(nodeId)?.zone;
+			const aliasRef = nodeRefs.get(nodeId)?.albAlias;
+			return {
+				record_name: config.recordName,
+				record_type: config.recordType,
+				ttl: config.ttl,
+				records: config.records,
+				...(zoneRef ? { zone_ref: zoneRef } : {}),
+				...(aliasRef ? { alias_ref: aliasRef } : {}),
+			};
+		}
+		case "aws_cloudwatch_log_group":
+			return {
+				retention_days: config.retentionDays,
+			};
+		case "aws_apigateway": {
+			const lambdaRefs = nodeRefs.get(nodeId)?.targetFunctions ?? [];
+			return {
+				stage_name: config.stageName,
+				route_path: config.routePath,
+				http_method: config.httpMethod,
+				...(lambdaRefs.length > 0
+					? { lambda_refs: lambdaRefs }
+					: {}),
 			};
 		}
 		default:
