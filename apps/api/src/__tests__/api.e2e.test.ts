@@ -259,6 +259,41 @@ describe("api compile preview", () => {
 		expect(Array.isArray(body.risks)).toBe(true);
 	});
 
+	test("emits record values for route53 records with a records list", async () => {
+		const res = await request(app, "POST", "/api/compile", {
+			graph: {
+				version: 1,
+				name: "dns-stack",
+				nodes: [
+					{
+						id: "zone-1",
+						type: "aws_route53_zone",
+						config: { zoneName: "example.com" },
+					},
+					{
+						id: "rec-1",
+						type: "aws_route53_record",
+						config: {
+							recordName: "api",
+							recordType: "A",
+							ttl: 300,
+							records: ["203.0.113.10"],
+						},
+					},
+				],
+				edges: [{ source: "rec-1", target: "zone-1" }],
+			},
+			region: "us-east-1",
+		});
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			files: Array<{ path: string; contents: string }>;
+		};
+		const main = body.files.find((f) => f.path === "main.tf")?.contents ?? "";
+		expect(main).toContain('resource "aws_route53_record" "rec-1"');
+		expect(main).toContain('records = ["203.0.113.10"]');
+	});
+
 	test("surfaces cost and security warnings as risks", async () => {
 		const graph = {
 			version: 1,

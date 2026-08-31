@@ -166,6 +166,60 @@ function ListFieldInput({
 	onChange: (value: unknown) => void;
 }) {
 	const itemFields = field.itemFields ?? [];
+
+	if (field.itemType) {
+		const items = Array.isArray(value) ? value : [];
+		return (
+			<div className="grid gap-2">
+				<Label>
+					{field.label}{" "}
+					{field.optional ? (
+						<span className="text-muted-foreground">(optional)</span>
+					) : null}
+				</Label>
+				{items.map((item, index) => (
+					<div className="flex items-center gap-2" key={`item-${index}`}>
+						<Input
+							type={field.itemType}
+							placeholder={field.placeholder}
+							value={String(item ?? "")}
+							onChange={(event) =>
+								onChange(
+									items.map((existing, i) =>
+										i === index
+											? field.itemType === "number"
+												? Number(event.target.value)
+												: event.target.value
+											: existing,
+									),
+								)
+							}
+						/>
+						<button
+							aria-label={`Remove value ${index + 1}`}
+							className="text-muted-foreground transition-colors hover:text-destructive"
+							onClick={() => onChange(items.filter((_, i) => i !== index))}
+							type="button"
+						>
+							<X className="h-3.5 w-3.5" />
+						</button>
+					</div>
+				))}
+				<Button
+					className="w-full"
+					size="sm"
+					variant="outline"
+					onClick={() =>
+						onChange([...items, field.itemType === "number" ? 0 : ""])
+					}
+					type="button"
+				>
+					+ Add value
+				</Button>
+			</div>
+		);
+	}
+
 	const items = Array.isArray(value)
 		? (value.filter(
 				(item): item is Record<string, unknown> =>

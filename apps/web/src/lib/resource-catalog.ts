@@ -35,6 +35,8 @@ export interface FieldDescriptor {
 	default?: unknown;
 	/** For list fields: schema of one entry. */
 	itemFields?: FieldDescriptor[];
+	/** For list fields of scalars (e.g. route53 records): item input type. */
+	itemType?: "text" | "number";
 }
 
 export interface ResourceUiSpec {
@@ -789,6 +791,14 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				type: "select",
 				options: ["A", "AAAA", "CNAME", "TXT", "MX"],
 				default: "A",
+			},
+			{
+				key: "records",
+				label: "Records",
+				type: "list",
+				itemType: "text",
+				optional: true,
+				placeholder: "203.0.113.10",
 			},
 			{
 				key: "ttl",
