@@ -22,21 +22,41 @@ export function createAnalyticsRoute(
 		let completed = 0;
 		let failed = 0;
 		let resourcesManaged = 0;
+		const latestProvisionByProject = new Map<
+			string,
+			{ createdAt: Date; cost: number }
+		>();
 		for (const deployment of deployments) {
-			if (deployment.status === "completed") {
-				completed += 1;
-				const net =
-					deployment.action === "destroy"
-						? -deployment.planSummary.destroy
-						: deployment.planSummary.create +
-							deployment.planSummary.update -
-							deployment.planSummary.destroy;
-				resourcesManaged += Math.max(0, net);
-			} else if (deployment.status === "failed") {
-				failed += 1;
+			if (deployment.status !== "completed") {
+				if (deployment.status === "failed") failed += 1;
+				continue;
+			}
+			completed += 1;
+			const net =
+				deployment.action === "destroy"
+					? -deployment.planSummary.destroy
+					: deployment.planSummary.create +
+						deployment.planSummary.update -
+						deployment.planSummary.destroy;
+			resourcesManaged += Math.max(0, net);
+
+			if (deployment.action !== "provision") continue;
+			const projectId = String(deployment.projectId);
+			const createdAt = deployment.createdAt ?? new Date(0);
+			const current = latestProvisionByProject.get(projectId);
+			if (!current || createdAt > current.createdAt) {
+				latestProvisionByProject.set(projectId, {
+					createdAt,
+					cost: deployment.estimatedMonthlyCost ?? 0,
+				});
 			}
 		}
 		const settled = completed + failed;
+		let monthlySpendEstimate = 0;
+		for (const { cost } of latestProvisionByProject.values()) {
+			monthlySpendEstimate += cost;
+		}
+		monthlySpendEstimate = Math.round(monthlySpendEstimate * 100) / 100;
 
 		return c.json({
 			stats: {
@@ -47,6 +67,7 @@ export function createAnalyticsRoute(
 				successRate:
 					settled === 0 ? null : Math.round((completed / settled) * 100),
 				resourcesManaged,
+				monthlySpendEstimate,
 			},
 		});
 	});

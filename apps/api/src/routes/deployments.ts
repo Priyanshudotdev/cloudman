@@ -163,5 +163,47 @@ export function createDeploymentsRoute(
 		return c.json({ ok: true, status: "canceled" });
 	});
 
+	const RETRYABLE_STATUSES = ["failed", "canceled"] as const;
+
+	deploymentsRoute.post("/:id/retry", async (c) => {
+		const deployment = await loadOwnedDeployment(c, c.req.param("id"));
+		if (!deployment) return c.json({ error: "Not found" }, 404);
+
+		const status = deployment.status as string;
+		if (
+			!RETRYABLE_STATUSES.includes(
+				status as (typeof RETRYABLE_STATUSES)[number],
+			)
+		) {
+			return c.json(
+				{
+					error: `Cannot retry deployment in status "${status}" — only failed or canceled deployments can be retried.`,
+				},
+				409,
+			);
+		}
+
+		const now = new Date();
+		await Deployment.updateOne(
+			{ _id: deployment._id },
+			{ $set: { status: "queued", updatedAt: now } },
+		);
+		await publishDeploymentEvent({
+			deploymentId: String(deployment._id),
+			level: "info",
+			message: "Deployment retry requested",
+			status: "queued",
+			at: now.toISOString(),
+		});
+
+		await getPlanQueue().add(
+			"plan",
+			{ deploymentId: String(deployment._id) },
+			{ jobId: String(deployment._id) },
+		);
+
+		return c.json({ ok: true, status: "queued" });
+	});
+
 	return deploymentsRoute;
 }

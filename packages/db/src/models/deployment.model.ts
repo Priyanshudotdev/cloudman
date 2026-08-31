@@ -66,6 +66,8 @@ const deploymentSchema = new Schema(
 			resources: { type: [planResourceSchema], default: [] },
 		},
 		events: { type: [deploymentEventSchema], default: [] },
+		/** Indicative monthly cost of the infra this deployment targets ($/mo). */
+		estimatedMonthlyCost: { type: Number, default: 0 },
 		error: { type: String },
 		startedAt: { type: Date },
 		completedAt: { type: Date },

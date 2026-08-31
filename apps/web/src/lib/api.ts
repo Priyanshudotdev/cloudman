@@ -101,6 +101,7 @@ export interface DeploymentDto {
 		destroy: number;
 		resources: DeploymentResourceDto[];
 	};
+	estimatedMonthlyCost?: number;
 	events?: DeploymentEventDto[];
 	startedAt?: string;
 	completedAt?: string;
@@ -135,6 +136,7 @@ export interface RiskDto {
 export interface CompileResultDto {
 	stats: { resources: number; files: number; bytes: number };
 	files: Array<{ path: string; contents: string }>;
+	cloudFormation: string;
 	cost: CostReportDto;
 	risks: RiskDto[];
 }
@@ -154,5 +156,6 @@ export interface AnalyticsStatsDto {
 		failed: number;
 		successRate: number | null;
 		resourcesManaged: number;
+		monthlySpendEstimate: number;
 	};
 }

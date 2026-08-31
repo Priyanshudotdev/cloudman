@@ -3,6 +3,7 @@ import {
 	buildIR,
 	compileIR,
 	estimateCost,
+	exportCloudFormation,
 } from "@my-better-t-app/core";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -52,6 +53,7 @@ export function createCompileRoute(
 		return c.json({
 			ir: built.document,
 			files,
+			cloudFormation: exportCloudFormation(built.document),
 			stats: {
 				resources: built.document.resources.length,
 				files: files.length,

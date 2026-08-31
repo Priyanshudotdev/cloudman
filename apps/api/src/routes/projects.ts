@@ -1,4 +1,4 @@
-import { validateGraph } from "@my-better-t-app/core";
+import { buildIR, estimateCost, validateGraph } from "@my-better-t-app/core";
 import {
 	AwsConnection,
 	Deployment,
@@ -27,6 +27,14 @@ export function createProjectsRoute(
 		const project = await Project.findById(id).lean();
 		if (!project || String(project.ownerUserId) !== userId) return null;
 		return project;
+	}
+
+	function estimateDeploymentCost(graphVersion: { graph?: unknown }): number {
+		const graph = graphVersion.graph;
+		if (!graph || typeof graph !== "object") return 0;
+		const built = buildIR(graph);
+		if (!built.ok) return 0;
+		return estimateCost(built.document).monthlyTotal;
 	}
 
 	const createProjectSchema = z.object({
@@ -273,7 +281,7 @@ export function createProjectsRoute(
 			);
 		}
 
-		let graphVersion: { _id: unknown } | null;
+		let graphVersion: { _id: unknown; graph?: unknown } | null;
 		if (parsed.data.action === "destroy") {
 			const lastCompleted = await Deployment.findOne({
 				projectId: id,
@@ -318,6 +326,10 @@ export function createProjectsRoute(
 			action: parsed.data.action,
 			awsConnectionId: parsed.data.awsConnectionId,
 			region: parsed.data.region ?? "us-east-1",
+			estimatedMonthlyCost:
+				parsed.data.action === "provision"
+					? estimateDeploymentCost(graphVersion)
+					: 0,
 			startedAt: now,
 		});
 

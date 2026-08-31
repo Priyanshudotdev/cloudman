@@ -4,7 +4,7 @@ import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
 import { Skeleton } from "@my-better-t-app/ui/components/skeleton";
 import { cn } from "@my-better-t-app/ui/lib/utils";
-import { RotateCw } from "lucide-react";
+import { RotateCcw, RotateCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -55,6 +55,7 @@ export function DeploymentHistory({
 	const [details, setDetails] = useState<Record<string, DeploymentDto>>({});
 	const [expanded, setExpanded] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(true);
+	const [retrying, setRetrying] = useState<string | null>(null);
 
 	const load = useCallback(async () => {
 		setRefreshing(true);
@@ -94,6 +95,21 @@ export function DeploymentHistory({
 			}
 		}
 		setExpanded(id);
+	}
+
+	async function retryDeployment(id: string) {
+		setRetrying(id);
+		try {
+			await api(`/api/deployments/${id}/retry`, { method: "POST" });
+			toast.success("Deployment requeued");
+			await load();
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to retry deployment",
+			);
+		} finally {
+			setRetrying(null);
+		}
 	}
 
 	return (
@@ -152,11 +168,33 @@ export function DeploymentHistory({
 												? "Destroy"
 												: "Provision"}
 										</span>
+										{(deployment.status === "failed" ||
+											deployment.status === "canceled") && (
+											<Button
+												variant="ghost"
+												size="sm"
+												disabled={retrying === deployment._id}
+												onClick={(e) => {
+													e.stopPropagation();
+													void retryDeployment(deployment._id);
+												}}
+												className="h-6 px-1.5 text-xs"
+											>
+												<RotateCcw className="mr-1 size-3" />
+												{retrying === deployment._id ? "Retrying..." : "Retry"}
+											</Button>
+										)}
 										{total !== null && (
 											<span className="text-muted-foreground">
 												{total} resource{total === 1 ? "" : "s"}
 											</span>
 										)}
+										{deployment.action === "provision" &&
+											(deployment.estimatedMonthlyCost ?? 0) > 0 && (
+												<span className="text-muted-foreground text-xs">
+													~${deployment.estimatedMonthlyCost?.toFixed(2)}/mo
+												</span>
+											)}
 									</div>
 									<span className="text-muted-foreground text-xs">
 										{fmtDate(deployment.createdAt)}

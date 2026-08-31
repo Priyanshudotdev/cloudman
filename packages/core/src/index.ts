@@ -21,6 +21,7 @@ export {
 	roundMoney,
 } from "./cost";
 export { MONTH_HOURS } from "./cost/pricing";
+export { exportCloudFormation } from "./export/cloudformation";
 export * from "./graph/cidr";
 export * from "./graph/dependencies";
 export type { NodeRefs } from "./graph/refs";

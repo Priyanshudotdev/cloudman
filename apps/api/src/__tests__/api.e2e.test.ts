@@ -239,6 +239,30 @@ describe("api compile preview", () => {
 		expect(main).toContain('resource "aws_instance" "web-1"');
 	});
 
+	test("returns a CloudFormation export that mirrors the tofu graph", async () => {
+		const res = await request(app, "POST", "/api/compile", {
+			graph: validGraph(),
+			region: "us-east-1",
+			bucketNameSuffix: "ab12cd34",
+		});
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			cloudFormation: string;
+		};
+		const parsed = JSON.parse(body.cloudFormation) as {
+			Resources: Record<string, { Type: string; DependsOn?: string[] }>;
+		};
+		const types = Object.values(parsed.Resources).map((r) => r.Type);
+		expect(types).toContain("AWS::EC2::Instance");
+		expect(types).toContain("AWS::ECR::Repository");
+		expect(types).toContain("AWS::Lambda::Function");
+		expect(types).toContain("AWS::ApiGateway::RestApi");
+		const ec2 = Object.entries(parsed.Resources).find(([, r]) => {
+			return r.Type === "AWS::EC2::Instance";
+		});
+		expect(ec2?.[1].DependsOn?.length).toBeGreaterThan(0);
+	});
+
 	test("returns a cost estimate and risk review alongside files", async () => {
 		const res = await request(app, "POST", "/api/compile", {
 			graph: validGraph(),
@@ -385,6 +409,7 @@ describe("api analytics", () => {
 				failed: number;
 				successRate: number | null;
 				resourcesManaged: number;
+				monthlySpendEstimate: number;
 			};
 		};
 		const before = beforeBody.stats;
@@ -401,6 +426,7 @@ describe("api analytics", () => {
 				status: "completed",
 				action: "provision",
 				planSummary: { create: 3, update: 1, destroy: 0, resources: [] },
+				estimatedMonthlyCost: 12.34,
 				completedAt: new Date(),
 			},
 			{
@@ -426,6 +452,10 @@ describe("api analytics", () => {
 			settled === 0
 				? null
 				: Math.round((after.stats.completed / settled) * 100),
+		);
+		expect(after.stats.monthlySpendEstimate).toBeCloseTo(
+			before.monthlySpendEstimate + 12.34,
+			2,
 		);
 	});
 });
@@ -754,6 +784,56 @@ describe("api deployment lifecycle (mock worker)", () => {
 			`/api/deployments/${deployment._id}/cancel`,
 		);
 		expect(again.status).toBe(409);
+	});
+
+	test("retry requeues a failed deployment", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "retry-flow",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const queued = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const { deployment } = (await json(queued)) as {
+			deployment: { _id: string };
+		};
+
+		const retryBeforeFail = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/retry`,
+		);
+		expect(retryBeforeFail.status).toBe(409);
+
+		const now = new Date();
+		await deploymentModel.updateOne(
+			{ _id: deployment._id },
+			{
+				$set: { status: "failed", updatedAt: now },
+				$push: {
+					events: {
+						$each: [{ at: now, level: "error", message: "Plan failed (mock)" }],
+					},
+				},
+			},
+		);
+
+		const retried = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/retry`,
+		);
+		expect(retried.status).toBe(200);
+		expect(((await json(retried)) as { status: string }).status).toBe("queued");
+
+		const retriedDoc = await deploymentModel.findById(deployment._id).lean();
+		expect(retriedDoc?.status).toBe("queued");
 	});
 
 	test("destroy pins the last completed provision and allows project deletion", async () => {

@@ -49,7 +49,7 @@ queued → initializing → planning → planned → awaiting_approval
 | `apps/web`            | Next.js 16 frontend — canvas editor, config panel, deploy drawer         |
 | `apps/api`            | Hono control-plane API — REST + Better Auth + SSE                        |
 | `apps/worker`         | Long-running worker — OpenTofu execution, STS AssumeRole                 |
-| `packages/core`       | Domain engine: graph schema, validation, dependency resolution, **CloudMan IR**, IR→OpenTofu compiler |
+| `packages/core`       | Domain engine: graph schema, validation, dependency resolution, **CloudMan IR**, IR→OpenTofu compiler, **CloudFormation export** |
 | `packages/queue`      | BullMQ queue definitions + Redis pub/sub event bus                       |
 | `packages/db`         | Mongoose models (projects, graph versions, deployments, AWS connections) |
 | `packages/auth`       | Better Auth (email/password, optional Google OAuth) on the MongoDB adapter |
@@ -95,7 +95,9 @@ without touching AWS.
    configure each node in the side panel
 4. **Validate** compiles the graph to OpenTofu server-side, reports any issues,
    and opens a preview of the generated `.tf` files with an estimated **~$/mo
-   cost breakdown** and a **security/ops risk review** (browse per file + copy)
+   cost breakdown** and a **security/ops risk review** (browse per file + copy).
+   A **CloudFormation export** (`template.json`) is also generated alongside the
+   Terraform files, providing an alternative IaC representation of the same stack
 5. **Versions** lists every immutable graph snapshot and lets you load any past
    version back onto the canvas
 6. **Save** stores a new immutable graph version
@@ -105,8 +107,11 @@ without touching AWS.
    - plan summary (create/update/destroy counts per resource) appears for review
    - you approve → worker runs `tofu apply` streaming progress until completion
 8. Project cards show **History**, a browsable deployment history with status
-   badges and full event logs; projects can be renamed/edited in place
-9. The dashboard analytics endpoint (`GET /api/analytics`) powers the stat cards
+   badges, plan summaries, an **~$/mo cost badge** on provision deployments, and
+   a **Retry** button for failed/canceled deployments; projects can be
+   renamed/edited in place
+9. The dashboard analytics endpoint (`GET /api/analytics`) powers the stat cards,
+   including an aggregate **monthly spend estimate** across the user's projects
 
 #### Networking wiring rules
 
@@ -202,13 +207,13 @@ the local workspace instead.
 
 ## Verification status
 
-- **101 tests across 3 suites**, all green via `bunx turbo run test`:
-  - `packages/core`: 66 unit tests (validation, cycles, topological order, IR
+- **111 tests across 3 suites**, all green via `bunx turbo run test`:
+  - `packages/core`: 74 unit tests (validation, cycles, topological order, IR
     defaults, CIDR math, networking wiring rules, compiled HCL assertions,
-    cost estimation & risk analysis, blueprint generation)
-  - `apps/api`: 27 e2e tests (auth, compile preview, cost/risk, stack generation,
+    cost estimation & risk analysis, blueprint generation, CloudFormation export)
+  - `apps/api`: 29 e2e tests (auth, compile preview, cost/risk, stack generation,
     projects + updates, graph versions, AWS connections, full deployment
-    lifecycle, guarded deletes/cancel, dashboard analytics, route53 records)
+    lifecycle, guarded deletes/cancel, retry, dashboard analytics, CloudFormation export, route53 records)
   - `apps/worker`: 8 mock-job tests (plan/apply provisioning, destroy, skips)
 - `bunx turbo run check-types` passes across all 6 packages; Biome clean
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
@@ -217,7 +222,11 @@ the local workspace instead.
 - Networking stack verified end-to-end (mock mode): vpc → subnet → security group →
   instance wiring, CIDR containment rejection, guarded deletes, destroy + workspace cleanup
 - Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
-  cancellation at every stage, worker-restart reconciliation, encrypted external IDs
+  cancellation and retry, worker-restart reconciliation, encrypted external IDs
+- Cost tracking verified end-to-end (mock mode): estimated monthly cost stored
+  per deployment, analytics aggregates spend across projects
+- CloudFormation export verified end-to-end (mock mode): all 25 catalog kinds
+  map to valid AWS:: resource types with wired DependsOn / Ref / GetAtt
 - Real mode verified up to the AWS boundary (graceful failure without credentials)
 
 > The api and worker e2e suites use **separate** test databases and Redis DBs
@@ -228,7 +237,6 @@ the local workspace instead.
 
 - Real AWS/prod operations (deploys currently run against a mock boundary;
   real-mode connection verification is validated up to the AWS API call)
-- CloudFormation/CDK-style IaC export alongside the generated OpenTofu plan
 
 ## Scripts
 

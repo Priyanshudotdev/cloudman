@@ -30,6 +30,11 @@ const STAT_CARDS: Array<{
 		format: (value) => (value === null ? "n/a" : `${value}%`),
 	},
 	{ label: "Resources managed", key: "resourcesManaged" },
+	{
+		label: "Monthly spend",
+		key: "monthlySpendEstimate",
+		format: (value) => (value === null ? "n/a" : `~$${value.toFixed(2)}/mo`),
+	},
 ];
 
 export function ProjectHome() {

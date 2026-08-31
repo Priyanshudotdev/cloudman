@@ -22,6 +22,8 @@ const SEVERITY_STYLES: Record<string, string> = {
 	low: "border-sky-500/40 bg-sky-500/10 text-sky-400",
 };
 
+const CLOUDFORMATION_PATH = "template.json";
+
 function money(value: number): string {
 	return `$${value.toFixed(2)}`;
 }
@@ -37,8 +39,11 @@ export function CompilePreview({
 	const [copied, setCopied] = useState(false);
 
 	const selected = useMemo(
-		() => result.files.find((file) => file.path === selectedPath) ?? null,
-		[result.files, selectedPath],
+		() =>
+			selectedPath === CLOUDFORMATION_PATH
+				? { path: CLOUDFORMATION_PATH, contents: result.cloudFormation }
+				: (result.files.find((file) => file.path === selectedPath) ?? null),
+		[result.cloudFormation, result.files, selectedPath],
 	);
 
 	const costRows = result.cost.resources.filter((row) => row.monthly > 0);
@@ -63,7 +68,7 @@ export function CompilePreview({
 			<div className="relative z-10 flex h-[80vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border bg-card shadow-2xl">
 				<div className="flex items-center gap-3 border-b px-4 py-2">
 					<FileCode2 className="size-4 text-muted-foreground" />
-					<span className="font-semibold text-sm">Generated OpenTofu</span>
+					<span className="font-semibold text-sm">Generated artifacts</span>
 					<div className="ml-auto flex items-center gap-2">
 						<Badge variant="secondary">
 							{result.stats.resources} resources
@@ -111,6 +116,25 @@ export function CompilePreview({
 									{file.path}
 								</button>
 							))}
+						</div>
+
+						<div className="space-y-1.5">
+							<div className="font-semibold text-muted-foreground text-xs uppercase tracking-wide">
+								Exports
+							</div>
+							<button
+								type="button"
+								onClick={() => setSelectedPath(CLOUDFORMATION_PATH)}
+								className={cn(
+									"flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent",
+									selectedPath === CLOUDFORMATION_PATH && "bg-accent",
+								)}
+							>
+								<span className="truncate">template.json</span>
+								<Badge variant="outline" className="ml-2 shrink-0">
+									CloudFormation
+								</Badge>
+							</button>
 						</div>
 
 						<div className="space-y-2">
@@ -179,6 +203,11 @@ export function CompilePreview({
 							<span className="truncate font-mono text-muted-foreground text-xs">
 								{selected?.path ?? ""}
 							</span>
+							{selected?.path === CLOUDFORMATION_PATH && (
+								<span className="shrink-0 font-medium text-[11px] text-muted-foreground">
+									CloudFormation template
+								</span>
+							)}
 							<Button
 								variant="ghost"
 								size="sm"
