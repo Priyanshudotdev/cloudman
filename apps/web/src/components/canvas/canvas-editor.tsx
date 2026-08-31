@@ -22,13 +22,18 @@ import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
 import { toast } from "sonner";
 
-import type { ProjectDto, ValidationIssueDto } from "@/lib/api";
+import type {
+	CompileResultDto,
+	ProjectDto,
+	ValidationIssueDto,
+} from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
 import {
 	defaultConfig,
 	RESOURCE_SPECS,
 	type ResourceUiSpec,
 } from "@/lib/resource-catalog";
+import { CompilePreview } from "./compile-preview";
 import { ConfigPanel } from "./config-panel";
 import { DeployPanel } from "./deploy-panel";
 import { type ResourceFlowNode, ResourceNode } from "./resource-node";
@@ -122,6 +127,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [deployAction, setDeployAction] = useState<"provision" | "destroy">(
 		"provision",
 	);
+	const [preview, setPreview] = useState<CompileResultDto | null>(null);
 
 	useEffect(() => {
 		async function load() {
@@ -275,12 +281,11 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		setBusy(true);
 		setIssues([]);
 		try {
-			const result = await api<{
-				stats: { resources: number; files: number; bytes: number };
-			}>("/api/compile", {
+			const result = await api<CompileResultDto>("/api/compile", {
 				method: "POST",
 				body: JSON.stringify({ graph: currentGraph() }),
 			});
+			setPreview(result);
 			toast.success(
 				`Compiles clean — ${result.stats.resources} resources, ${result.stats.files} tofu files`,
 			);
@@ -436,6 +441,13 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							projectId={projectId}
 							action={deployAction}
 							onClose={() => setDeployOpen(false)}
+						/>
+					)}
+
+					{preview && (
+						<CompilePreview
+							result={preview}
+							onClose={() => setPreview(null)}
 						/>
 					)}
 				</div>
