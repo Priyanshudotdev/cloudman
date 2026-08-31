@@ -7,7 +7,7 @@ const awsConnectionSchema = new Schema(
 	{
 		_id: { type: ObjectId, auto: true },
 		/** better-auth emits fractional ids ("user_..."); store as plain strings. */
-		userId: { type: String, required: true, index: true },
+		userId: { type: String, required: true },
 		label: { type: String, required: true, minlength: 1, maxlength: 80 },
 		roleArn: { type: String, required: true },
 		externalId: { type: String, required: true },
