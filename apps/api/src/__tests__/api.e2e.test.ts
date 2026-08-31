@@ -326,6 +326,70 @@ describe("api projects + graph versions", () => {
 	});
 });
 
+describe("api project updates", () => {
+	test("renames and edits a project description", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "rename-me",
+			description: "before",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+
+		const patched = await request(app, "PUT", `/api/projects/${project._id}`, {
+			name: "renamed",
+			description: "after",
+		});
+		expect(patched.status).toBe(200);
+		const body = (await json(patched)) as {
+			project: { name: string; description: string };
+		};
+		expect(body.project.name).toBe("renamed");
+		expect(body.project.description).toBe("after");
+	});
+
+	test("partial update only touches the given field", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "partial",
+			description: "keep-me",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+
+		const patched = await request(app, "PUT", `/api/projects/${project._id}`, {
+			name: "partial-2",
+		});
+		expect(patched.status).toBe(200);
+		const body = (await json(patched)) as {
+			project: { name: string; description: string };
+		};
+		expect(body.project.name).toBe("partial-2");
+		expect(body.project.description).toBe("keep-me");
+	});
+
+	test("rejects empty and invalid update bodies", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "noop",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+
+		const empty = await request(app, "PUT", `/api/projects/${project._id}`, {});
+		expect(empty.status).toBe(400);
+
+		const invalid = await request(app, "PUT", `/api/projects/${project._id}`, {
+			name: "",
+		});
+		expect(invalid.status).toBe(400);
+	});
+
+	test("cannot update another user's project", async () => {
+		const res = await request(
+			app,
+			"PUT",
+			"/api/projects/000000000000000000000000",
+			{ name: "nope" },
+		);
+		expect(res.status).toBe(404);
+	});
+});
+
 describe("api aws-connections", () => {
 	test("creates, lists, deletes, and verifies connections", async () => {
 		const created = await request(app, "POST", "/api/aws-connections", {

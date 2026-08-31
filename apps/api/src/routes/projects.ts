@@ -64,6 +64,43 @@ export function createProjectsRoute(
 		return c.json({ project });
 	});
 
+	const updateProjectSchema = z.object({
+		name: z.string().min(1).max(120).optional(),
+		description: z.string().max(500).optional(),
+	});
+
+	projectsRoute.put("/:id", async (c) => {
+		const id = c.req.param("id");
+		const project = await loadOwnedProject(c, id);
+		if (!project) return c.json({ error: "Not found" }, 404);
+
+		const parsed = updateProjectSchema.safeParse(await c.req.json());
+		if (!parsed.success) {
+			return c.json(
+				{ error: "Invalid request", issues: parsed.error.issues },
+				400,
+			);
+		}
+		if (
+			parsed.data.name === undefined &&
+			parsed.data.description === undefined
+		) {
+			return c.json({ error: "Nothing to update" }, 400);
+		}
+
+		const patch: Record<string, unknown> = { updatedAt: new Date() };
+		if (parsed.data.name !== undefined) patch.name = parsed.data.name;
+		if (parsed.data.description !== undefined)
+			patch.description = parsed.data.description;
+
+		const updated = await Project.findByIdAndUpdate(id, patch, {
+			returnDocument: "after",
+			runValidators: true,
+		}).lean();
+		if (!updated) return c.json({ error: "Not found" }, 404);
+		return c.json({ project: updated });
+	});
+
 	projectsRoute.delete("/:id", async (c) => {
 		const id = c.req.param("id");
 		const project = await loadOwnedProject(c, id);
