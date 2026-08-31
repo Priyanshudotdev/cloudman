@@ -4,6 +4,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { type AppEnv, requireAuth } from "./lib/session";
+import { createAnalyticsRoute } from "./routes/analytics";
 import { createAwsConnectionsRoute } from "./routes/aws-connections";
 import { createCompileRoute } from "./routes/compile";
 import { createDeploymentsRoute } from "./routes/deployments";
@@ -53,6 +54,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
 
 	app.route("/api/projects", createProjectsRoute(authMiddleware));
+	app.route("/api/analytics", createAnalyticsRoute(authMiddleware));
 	app.route("/api/deployments", createDeploymentsRoute(authMiddleware));
 	app.route("/api/compile", createCompileRoute(authMiddleware));
 	app.route("/api/aws-connections", createAwsConnectionsRoute(authMiddleware));

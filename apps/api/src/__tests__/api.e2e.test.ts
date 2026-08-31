@@ -337,6 +337,64 @@ describe("api generate (blueprints)", () => {
 	});
 });
 
+describe("api analytics", () => {
+	test("reports safe aggregates that track seeded deployments", async () => {
+		const db = await import("@my-better-t-app/db");
+		const beforeBody = (await json(
+			await request(app, "GET", "/api/analytics"),
+		)) as unknown as {
+			stats: {
+				projects: number;
+				deployments: number;
+				completed: number;
+				failed: number;
+				successRate: number | null;
+				resourcesManaged: number;
+			};
+		};
+		const before = beforeBody.stats;
+
+		const created = (await json(
+			await request(app, "POST", "/api/projects", { name: "analytics-probe" }),
+		)) as { project: { _id: string } };
+		const projectId = created.project._id;
+
+		await db.Deployment.insertMany([
+			{
+				projectId,
+				graphVersionId: "640000000000000000000000",
+				status: "completed",
+				action: "provision",
+				planSummary: { create: 3, update: 1, destroy: 0, resources: [] },
+				completedAt: new Date(),
+			},
+			{
+				projectId,
+				graphVersionId: "640000000000000000000001",
+				status: "failed",
+				action: "provision",
+				planSummary: { create: 2, update: 0, destroy: 0, resources: [] },
+				error: "plan failed",
+			},
+		]);
+
+		const after = (await json(
+			await request(app, "GET", "/api/analytics"),
+		)) as typeof beforeBody;
+		expect(after.stats.projects).toBe(before.projects + 1);
+		expect(after.stats.deployments).toBe(before.deployments + 2);
+		expect(after.stats.completed).toBe(before.completed + 1);
+		expect(after.stats.failed).toBe(before.failed + 1);
+		expect(after.stats.resourcesManaged).toBe(before.resourcesManaged + 4);
+		const settled = after.stats.completed + after.stats.failed;
+		expect(after.stats.successRate).toBe(
+			settled === 0
+				? null
+				: Math.round((after.stats.completed / settled) * 100),
+		);
+	});
+});
+
 describe("api projects + graph versions", () => {
 	test("creates, lists, gets, saves graphs, and deletes projects", async () => {
 		const created = await request(app, "POST", "/api/projects", {

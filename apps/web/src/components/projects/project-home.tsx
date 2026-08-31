@@ -14,11 +14,27 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { DeploymentHistory } from "@/components/deployments/deployment-history";
-import type { ProjectDto } from "@/lib/api";
+import type { AnalyticsStatsDto, ProjectDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
+
+const STAT_CARDS: Array<{
+	label: string;
+	key: keyof AnalyticsStatsDto["stats"];
+	format?: (value: number | null) => string;
+}> = [
+	{ label: "Projects", key: "projects" },
+	{ label: "Deployments", key: "deployments" },
+	{
+		label: "Success rate",
+		key: "successRate",
+		format: (value) => (value === null ? "n/a" : `${value}%`),
+	},
+	{ label: "Resources managed", key: "resourcesManaged" },
+];
 
 export function ProjectHome() {
 	const [projects, setProjects] = useState<ProjectDto[]>([]);
+	const [stats, setStats] = useState<AnalyticsStatsDto["stats"] | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [newName, setNewName] = useState("");
 	const [creating, setCreating] = useState(false);
@@ -41,9 +57,19 @@ export function ProjectHome() {
 		}
 	}, []);
 
+	const loadStats = useCallback(async () => {
+		try {
+			const result = await api<AnalyticsStatsDto>("/api/analytics");
+			setStats(result.stats);
+		} catch {
+			setStats(null);
+		}
+	}, []);
+
 	useEffect(() => {
 		void loadProjects();
-	}, [loadProjects]);
+		void loadStats();
+	}, [loadProjects, loadStats]);
 
 	async function createProject() {
 		if (!newName.trim()) return;
@@ -133,6 +159,21 @@ export function ProjectHome() {
 				Design AWS infrastructure on a canvas, review the generated plan,
 				deploy.
 			</p>
+
+			{stats && (
+				<div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+					{STAT_CARDS.map((card) => (
+						<div key={card.key} className="rounded-lg border bg-card p-4">
+							<p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+								{card.label}
+							</p>
+							<p className="mt-1 font-semibold text-xl">
+								{card.format ? card.format(stats[card.key]) : stats[card.key]}
+							</p>
+						</div>
+					))}
+				</div>
+			)}
 
 			<div className="mb-6 flex gap-2">
 				<Input

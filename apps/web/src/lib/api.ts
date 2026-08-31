@@ -145,3 +145,14 @@ export interface GenerateResultDto {
 	graph: GraphJson;
 	warnings: string[];
 }
+
+export interface AnalyticsStatsDto {
+	stats: {
+		projects: number;
+		deployments: number;
+		completed: number;
+		failed: number;
+		successRate: number | null;
+		resourcesManaged: number;
+	};
+}
