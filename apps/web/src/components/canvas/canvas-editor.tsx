@@ -20,8 +20,8 @@ import "@xyflow/react/dist/style.css";
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-
 import type {
 	CompileResultDto,
 	GenerateResultDto,
@@ -122,6 +122,11 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [versionsOpen, setVersionsOpen] = useState(false);
 	const [generatePrompt, setGeneratePrompt] = useState("");
 	const [generating, setGenerating] = useState(false);
+	const [templatesOpen, setTemplatesOpen] = useState(false);
+	const [templates, setTemplates] = useState<
+		Array<{ id: string; name: string; description: string }>
+	>([]);
+	const [templateLoading, setTemplateLoading] = useState(false);
 
 	useEffect(() => {
 		async function load() {
@@ -155,6 +160,24 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		}
 		void load();
 	}, [projectId, setNodes, setEdges]);
+
+	useEffect(() => {
+		async function loadTemplates() {
+			try {
+				const result = await api<{
+					blueprints: Array<{
+						id: string;
+						name: string;
+						description: string;
+					}>;
+				}>("/api/blueprints");
+				setTemplates(result.blueprints);
+			} catch {
+				// Non-fatal: templates are an enhancement over the generate box.
+			}
+		}
+		void loadTemplates();
+	}, []);
 
 	const selectedNode = useMemo(
 		() => nodes.find((node) => node.id === selectedId) ?? null,
@@ -234,6 +257,40 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		);
 	}
 
+	const removeNode = useCallback(
+		(id: string) => {
+			setNodes((current) => current.filter((node) => node.id !== id));
+			setEdges((current) =>
+				current.filter((edge) => edge.source !== id && edge.target !== id),
+			);
+			setSelectedId((current) => (current === id ? null : current));
+			setIssues([]);
+		},
+		[setNodes, setEdges],
+	);
+
+	useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (!selectedId) return;
+			if (event.key === "Delete" || event.key === "Backspace") {
+				const target = event.target as HTMLElement | null;
+				if (
+					target &&
+					(target.tagName === "INPUT" ||
+						target.tagName === "TEXTAREA" ||
+						target.tagName === "SELECT" ||
+						target.isContentEditable)
+				) {
+					return;
+				}
+				event.preventDefault();
+				removeNode(selectedId);
+			}
+		}
+		window.addEventListener("keydown", onKeyDown);
+		return () => window.removeEventListener("keydown", onKeyDown);
+	}, [selectedId, removeNode]);
+
 	function currentGraph(): GraphJson {
 		return graphFromFlow(
 			nodes,
@@ -293,6 +350,31 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 			}
 		} finally {
 			setBusy(false);
+		}
+	}
+
+	async function handleLoadTemplate(blueprintId: string) {
+		setTemplateLoading(true);
+		setTemplatesOpen(false);
+		try {
+			const result = await api<{ blueprint: string; graph: GraphJson }>(
+				`/api/blueprints/${blueprintId}`,
+			);
+			const flow = flowFromGraph(result.graph);
+			setNodes(flow.nodes);
+			setEdges(flow.edges);
+			setSelectedId(null);
+			setIssues([]);
+			setPreview(null);
+			toast.success(
+				`Loaded "${result.blueprint}" template (${flow.nodes.length} resources, unsaved)`,
+			);
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to load template",
+			);
+		} finally {
+			setTemplateLoading(false);
 		}
 	}
 
@@ -383,6 +465,47 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					{edges.length} connection{edges.length === 1 ? "" : "s"}
 				</span>
 				<div className="ml-auto flex items-center gap-2">
+					<div className="relative">
+						<Button
+							variant="outline"
+							size="sm"
+							disabled={busy || templateLoading}
+							onClick={() => setTemplatesOpen((current) => !current)}
+						>
+							Templates
+							<ChevronDown className="ml-1 h-3.5 w-3.5" />
+						</Button>
+						{templatesOpen && !templateLoading && (
+							<div className="absolute top-full right-0 z-20 mt-1 w-72 overflow-hidden rounded-md border bg-popover shadow-md">
+								<div className="border-b px-3 py-2 font-medium text-[11px] text-muted-foreground">
+									One-click stack templates
+								</div>
+								<ul className="max-h-80 overflow-y-auto">
+									{templates.length === 0 && (
+										<li className="px-3 py-2 text-muted-foreground text-xs">
+											No templates available.
+										</li>
+									)}
+									{templates.map((template) => (
+										<li key={template.id}>
+											<button
+												type="button"
+												className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-accent"
+												onClick={() => void handleLoadTemplate(template.id)}
+											>
+												<span className="font-medium text-sm">
+													{template.name}
+												</span>
+												<span className="text-[11px] text-muted-foreground">
+													{template.description}
+												</span>
+											</button>
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</div>
 					<form
 						className="flex items-center gap-1.5"
 						onSubmit={(event) => {
@@ -545,6 +668,9 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							config: { ...(selectedNode?.data.config ?? {}), [key]: value },
 						})
 					}
+					onRemove={() => {
+						if (selectedId) removeNode(selectedId);
+					}}
 				/>
 			</div>
 		</div>

@@ -4,7 +4,7 @@ import { Button } from "@my-better-t-app/ui/components/button";
 import { Checkbox } from "@my-better-t-app/ui/components/checkbox";
 import { Input } from "@my-better-t-app/ui/components/input";
 import { Label } from "@my-better-t-app/ui/components/label";
-import { Plus, X } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 
 import type { FieldDescriptor, ResourceUiSpec } from "@/lib/resource-catalog";
 
@@ -15,6 +15,7 @@ interface ConfigPanelProps {
 	config: Record<string, unknown>;
 	onChangeLabel: (label: string) => void;
 	onChangeConfig: (key: string, value: unknown) => void;
+	onRemove: () => void;
 }
 
 export function ConfigPanel({
@@ -24,6 +25,7 @@ export function ConfigPanel({
 	config,
 	onChangeLabel,
 	onChangeConfig,
+	onRemove,
 }: ConfigPanelProps) {
 	if (!spec || !nodeId) {
 		return (
@@ -35,9 +37,24 @@ export function ConfigPanel({
 
 	return (
 		<div className="flex h-full w-72 flex-col overflow-y-auto border-l bg-card">
-			<div className="border-b px-4 py-3">
-				<p className="font-semibold text-sm">{spec.label}</p>
-				<p className="font-mono text-[11px] text-muted-foreground">{nodeId}</p>
+			<div className="flex items-center justify-between border-b px-4 py-3">
+				<div className="min-w-0">
+					<p className="font-semibold text-sm">{spec.label}</p>
+					<p className="truncate font-mono text-[11px] text-muted-foreground">
+						{nodeId}
+					</p>
+				</div>
+				<Button
+					variant="ghost"
+					size="sm"
+					aria-label="Remove node"
+					title="Remove node from canvas"
+					className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+					onClick={onRemove}
+					type="button"
+				>
+					<Trash2 className="h-4 w-4" />
+				</Button>
 			</div>
 			<div className="flex flex-col gap-4 p-4">
 				<div className="grid gap-1.5">
