@@ -16,8 +16,12 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	title: "my-better-t-app",
-	description: "my-better-t-app",
+	title: {
+		default: "CloudMan",
+		template: "%s · CloudMan",
+	},
+	description:
+		"Design AWS infrastructure on a canvas, review generated OpenTofu, and deploy with plan/apply previews.",
 };
 
 export default function RootLayout({
