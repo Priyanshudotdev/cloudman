@@ -24,6 +24,10 @@ export function ProjectHome() {
 	const [newName, setNewName] = useState("");
 	const [creating, setCreating] = useState(false);
 	const [historyProjectId, setHistoryProjectId] = useState<string | null>(null);
+	const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+	const [editName, setEditName] = useState("");
+	const [editDescription, setEditDescription] = useState("");
+	const [savingEdit, setSavingEdit] = useState(false);
 
 	const loadProjects = useCallback(async () => {
 		try {
@@ -63,6 +67,43 @@ export function ProjectHome() {
 			}
 		} finally {
 			setCreating(false);
+		}
+	}
+
+	function beginEdit(project: ProjectDto) {
+		setEditingProjectId(project._id);
+		setEditName(project.name);
+		setEditDescription(project.description);
+	}
+
+	async function saveEdit(project: ProjectDto) {
+		setSavingEdit(true);
+		try {
+			const result = await api<{ project: ProjectDto }>(
+				`/api/projects/${project._id}`,
+				{
+					method: "PUT",
+					body: JSON.stringify({
+						name: editName.trim() || project.name,
+						description: editDescription.trim(),
+					}),
+				},
+			);
+			setProjects((current) =>
+				current.map((item) => (item._id === project._id ? result.project : item)),
+			);
+			setEditingProjectId(null);
+			toast.success("Project updated");
+		} catch (error) {
+			if (error instanceof ApiError && error.issues) {
+				toast.error(error.issues.map((issue) => issue.message).join("\n"));
+			} else {
+				toast.error(
+					error instanceof Error ? error.message : "Failed to update project",
+				);
+			}
+		} finally {
+			setSavingEdit(false);
 		}
 	}
 
@@ -131,42 +172,87 @@ export function ProjectHome() {
 										<CardDescription>{project.description}</CardDescription>
 									)}
 								</CardHeader>
-								<CardContent className="flex items-center justify-between pb-3">
-									<span className="text-muted-foreground text-xs">
-										Updated {new Date(project.updatedAt).toLocaleString()}
-									</span>
-									<div className="flex gap-2">
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() =>
-												setHistoryProjectId(
-													historyProjectId === project._id
-														? null
-														: project._id,
-												)
-											}
-										>
-											History
-										</Button>
-										<Link
-											href={`/projects/${project._id}` as Route}
-											className={buttonVariants({
-												variant: "outline",
-												size: "sm",
-											})}
-										>
-											Open canvas
-										</Link>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => void deleteProject(project)}
-										>
-											Delete
-										</Button>
-									</div>
-								</CardContent>
+								{editingProjectId === project._id ? (
+									<CardContent className="grid gap-3 pt-0 pb-3">
+										<div className="grid gap-1.5">
+											<Input
+												aria-label="Project name"
+												value={editName}
+												onChange={(event) => setEditName(event.target.value)}
+											/>
+										</div>
+										<div className="grid gap-1.5">
+											<Input
+												aria-label="Project description"
+												placeholder="Description (optional)"
+												value={editDescription}
+												onChange={(event) =>
+													setEditDescription(event.target.value)
+												}
+											/>
+										</div>
+										<div className="flex justify-end gap-2">
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => setEditingProjectId(null)}
+											>
+												Cancel
+											</Button>
+											<Button
+												size="sm"
+												disabled={savingEdit || !editName.trim()}
+												onClick={() => void saveEdit(project)}
+											>
+												{savingEdit ? "Saving..." : "Save changes"}
+											</Button>
+										</div>
+									</CardContent>
+								) : (
+									<CardContent className="flex items-center justify-between pb-3">
+										<span className="text-muted-foreground text-xs">
+											Updated {new Date(project.updatedAt).toLocaleString()}
+										</span>
+										<div className="flex gap-2">
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => void beginEdit(project)}
+											>
+												Edit
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() =>
+													setHistoryProjectId(
+														historyProjectId === project._id
+															? null
+															: project._id,
+													)
+												}
+											>
+												History
+											</Button>
+											<Link
+												href={`/projects/${project._id}` as Route}
+												className={buttonVariants({
+													variant: "outline",
+													size: "sm",
+												})}
+											>
+												Open canvas
+											</Link>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => void deleteProject(project)}
+											>
+												Delete
+											</Button>
+										</div>
+									</CardContent>
+								)}
 							</Card>
 							{historyProjectId === project._id && (
 								<DeploymentHistory

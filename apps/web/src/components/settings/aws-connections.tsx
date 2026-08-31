@@ -72,11 +72,15 @@ export function AwsConnectionsManager() {
 		}
 	}
 
-	async function deleteConnection(id: string) {
+	async function deleteConnection(connection: AwsConnectionDto) {
+		const confirmed = window.confirm(
+			`Remove connection "${connection.label}"? Deployments won't be able to use it until you re-add it.`,
+		);
+		if (!confirmed) return;
 		try {
-			await api(`/api/aws-connections/${id}`, { method: "DELETE" });
+			await api(`/api/aws-connections/${connection._id}`, { method: "DELETE" });
 			setConnections((current) =>
-				current.filter((connection) => connection._id !== id),
+				current.filter((item) => item._id !== connection._id),
 			);
 			toast.success("Connection removed");
 		} catch (error) {
@@ -224,7 +228,7 @@ export function AwsConnectionsManager() {
 									<Button
 										variant="ghost"
 										size="sm"
-										onClick={() => void deleteConnection(connection._id)}
+										onClick={() => void deleteConnection(connection)}
 									>
 										Remove
 									</Button>

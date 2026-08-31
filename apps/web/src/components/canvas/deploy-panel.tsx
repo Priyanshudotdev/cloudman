@@ -24,6 +24,20 @@ interface StreamEvent {
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "canceled"]);
 
+const AWS_REGIONS = [
+	"us-east-1",
+	"us-east-2",
+	"us-west-1",
+	"us-west-2",
+	"eu-west-1",
+	"eu-west-2",
+	"eu-central-1",
+	"ap-south-1",
+	"ap-southeast-1",
+	"ap-northeast-1",
+	"sa-east-1",
+];
+
 export function DeployPanel({
 	projectId,
 	action,
@@ -39,6 +53,7 @@ export function DeployPanel({
 	const [selectedConnectionId, setSelectedConnectionId] = useState<
 		string | null
 	>(null);
+	const [region, setRegion] = useState("us-east-1");
 	const [starting, setStarting] = useState(false);
 
 	const [deploymentId, setDeploymentId] = useState<string | null>(null);
@@ -118,6 +133,7 @@ export function DeployPanel({
 					method: "POST",
 					body: JSON.stringify({
 						action,
+						region: region.trim() || "us-east-1",
 						...(selectedConnectionId
 							? { awsConnectionId: selectedConnectionId }
 							: {}),
@@ -195,7 +211,13 @@ export function DeployPanel({
 					connections={connections}
 					loading={loadingConnections}
 					selectedConnectionId={selectedConnectionId}
-					onSelect={(id) => setSelectedConnectionId(id)}
+					onSelect={(id) => {
+						setSelectedConnectionId(id);
+						const connection = connections.find((item) => item._id === id);
+						if (connection) setRegion(connection.region);
+					}}
+					region={region}
+					onRegionChange={setRegion}
 					starting={starting}
 					onStart={() => void startDeployment()}
 				/>
@@ -296,6 +318,8 @@ function SetupView({
 	loading,
 	selectedConnectionId,
 	onSelect,
+	region,
+	onRegionChange,
 	starting,
 	onStart,
 }: {
@@ -304,6 +328,8 @@ function SetupView({
 	loading: boolean;
 	selectedConnectionId: string | null;
 	onSelect: (id: string | null) => void;
+	region: string;
+	onRegionChange: (region: string) => void;
 	starting: boolean;
 	onStart: () => void;
 }) {
@@ -367,6 +393,28 @@ function SetupView({
 						)}
 					</div>
 				)}
+			</div>
+
+			<div>
+				<Label className="mb-2 block font-medium text-muted-foreground text-xs uppercase tracking-wide">
+					Region
+				</Label>
+				<input
+					list="cloudman-aws-regions"
+					className="w-full rounded-md border bg-background px-3 py-2 font-mono text-xs"
+					value={region}
+					onChange={(event) => onRegionChange(event.target.value)}
+					aria-label="AWS region"
+				/>
+				<datalist id="cloudman-aws-regions">
+					{AWS_REGIONS.map((awsRegion) => (
+						<option key={awsRegion} value={awsRegion} />
+					))}
+				</datalist>
+				<p className="mt-1 text-[11px] text-muted-foreground">
+					Auto-fills from the selected connection; the worker uses it for the
+					plan/apply runs.
+				</p>
 			</div>
 
 			<Button
