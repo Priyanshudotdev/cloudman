@@ -7,6 +7,7 @@ import { type AppEnv, requireAuth } from "./lib/session";
 import { createAwsConnectionsRoute } from "./routes/aws-connections";
 import { createCompileRoute } from "./routes/compile";
 import { createDeploymentsRoute } from "./routes/deployments";
+import { createGenerateRoute } from "./routes/generate";
 import { createProjectsRoute } from "./routes/projects";
 
 export interface CreateAppOptions {
@@ -55,6 +56,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.route("/api/deployments", createDeploymentsRoute(authMiddleware));
 	app.route("/api/compile", createCompileRoute(authMiddleware));
 	app.route("/api/aws-connections", createAwsConnectionsRoute(authMiddleware));
+	app.route("/api/generate", createGenerateRoute(authMiddleware));
 
 	return app;
 }

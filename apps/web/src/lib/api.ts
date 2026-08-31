@@ -1,4 +1,5 @@
 import { env } from "@my-better-t-app/env/web";
+import type { GraphJson } from "@/lib/graph-types";
 
 export interface ValidationIssueDto {
 	code: string;
@@ -136,4 +137,11 @@ export interface CompileResultDto {
 	files: Array<{ path: string; contents: string }>;
 	cost: CostReportDto;
 	risks: RiskDto[];
+}
+
+export interface GenerateResultDto {
+	blueprint: string | null;
+	mode: "engine" | "llm";
+	graph: GraphJson;
+	warnings: string[];
 }

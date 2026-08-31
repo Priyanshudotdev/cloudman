@@ -1,3 +1,10 @@
+export type { Blueprint, GenerateResult } from "./blueprints";
+export {
+	DEFAULT_BLUEPRINT,
+	generateGraphFromPrompt,
+	listBlueprints,
+	MAX_PROMPT_LENGTH,
+} from "./blueprints";
 export type { CompiledFile, CompileOptions } from "./compiler";
 export { compileIR } from "./compiler";
 export type {

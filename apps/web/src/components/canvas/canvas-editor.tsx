@@ -24,6 +24,7 @@ import { toast } from "sonner";
 
 import type {
 	CompileResultDto,
+	GenerateResultDto,
 	ProjectDto,
 	ValidationIssueDto,
 } from "@/lib/api";
@@ -119,6 +120,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	);
 	const [preview, setPreview] = useState<CompileResultDto | null>(null);
 	const [versionsOpen, setVersionsOpen] = useState(false);
+	const [generatePrompt, setGeneratePrompt] = useState("");
+	const [generating, setGenerating] = useState(false);
 
 	useEffect(() => {
 		async function load() {
@@ -320,6 +323,38 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		toast.success(`Loaded version ${loadedVersion} (unsaved)`);
 	}
 
+	async function handleGenerate() {
+		const prompt = generatePrompt.trim();
+		if (prompt.length < 3) {
+			toast.error("Describe the stack in a few words first");
+			return;
+		}
+		setGenerating(true);
+		try {
+			const result = await api<GenerateResultDto>("/api/generate", {
+				method: "POST",
+				body: JSON.stringify({ prompt }),
+			});
+			const flow = flowFromGraph(result.graph);
+			setNodes(flow.nodes);
+			setEdges(flow.edges);
+			setSelectedId(null);
+			setIssues([]);
+			setPreview(null);
+			const label = result.mode === "llm" ? "AI-generated" : result.blueprint;
+			toast.success(
+				`Loaded ${label} stack (${result.graph.nodes.length} resources, unsaved)`,
+			);
+			for (const warning of result.warnings) {
+				console.warn("[generate]", warning);
+			}
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "Generation failed");
+		} finally {
+			setGenerating(false);
+		}
+	}
+
 	const selectedSpec: ResourceUiSpec | null = selectedNode
 		? (RESOURCE_SPECS[selectedNode.data.resourceType] ?? null)
 		: null;
@@ -348,6 +383,29 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					{edges.length} connection{edges.length === 1 ? "" : "s"}
 				</span>
 				<div className="ml-auto flex items-center gap-2">
+					<form
+						className="flex items-center gap-1.5"
+						onSubmit={(event) => {
+							event.preventDefault();
+							void handleGenerate();
+						}}
+					>
+						<input
+							value={generatePrompt}
+							onChange={(event) => setGeneratePrompt(event.target.value)}
+							placeholder="Describe a stack…"
+							disabled={generating || busy}
+							className="h-8 w-44 rounded-md border bg-background px-2 text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+						/>
+						<Button
+							type="submit"
+							variant="outline"
+							size="sm"
+							disabled={generating || busy}
+						>
+							{generating ? "Generating…" : "Generate"}
+						</Button>
+					</form>
 					<Button
 						variant="ghost"
 						size="sm"

@@ -304,6 +304,39 @@ describe("api compile preview", () => {
 	});
 });
 
+describe("api generate (blueprints)", () => {
+	test("generates an engine stack from a prompt and round-trips through compile", async () => {
+		const res = await request(app, "POST", "/api/generate", {
+			prompt: "serverless api with lambda",
+		});
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			blueprint: string;
+			mode: string;
+			graph: { nodes: Array<{ type: string }> };
+			warnings: string[];
+		};
+		expect(body.mode).toBe("engine");
+		expect(body.blueprint).toBe("serverless-api");
+		expect(body.graph.nodes.some((n) => n.type === "aws_lambda")).toBe(true);
+		expect(body.warnings.length).toBeGreaterThan(0);
+
+		const compiled = await request(app, "POST", "/api/compile", {
+			graph: body.graph,
+		});
+		expect(compiled.status).toBe(200);
+	});
+
+	test("rejects a too-short or too-long prompt", async () => {
+		const short = await request(app, "POST", "/api/generate", { prompt: "ab" });
+		expect(short.status).toBe(400);
+		const long = await request(app, "POST", "/api/generate", {
+			prompt: "x".repeat(501),
+		});
+		expect(long.status).toBe(400);
+	});
+});
+
 describe("api projects + graph versions", () => {
 	test("creates, lists, gets, saves graphs, and deletes projects", async () => {
 		const created = await request(app, "POST", "/api/projects", {

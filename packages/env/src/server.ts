@@ -41,6 +41,9 @@ export const env = createEnv({
 		/** Google OAuth — optional; the Google login button is hidden until set. */
 		GOOGLE_CLIENT_ID: z.string().min(1).optional(),
 		GOOGLE_CLIENT_SECRET: z.string().min(1).optional(),
+		/** Optional LLM-backed stack generation (OpenRouter). Engine templates are used when unset. */
+		OPENROUTER_API_KEY: z.string().min(1).optional(),
+		CLOUDMAN_LLM_GENERATION: z.enum(["0", "1"]).optional().default("0"),
 	},
 	runtimeEnv: runtimeEnv,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,
