@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 
-process.env.DATABASE_URL = "mongodb://127.0.0.1:27017/cloudman_test";
-process.env.REDIS_URL = "redis://127.0.0.1:6379/15";
+// Separate DB from the api e2e suite (which drops cloudman_test in beforeAll)
+// so `turbo run test` can run both suites in parallel without clobbering.
+process.env.DATABASE_URL = "mongodb://127.0.0.1:27017/cloudman_test_worker";
+process.env.REDIS_URL = "redis://127.0.0.1:6379/14";
 process.env.NODE_ENV = "test";
 process.env.CLOUDMAN_WORKER_MOCK = "1";
 process.env.CLOUDMAN_REMOTE_STATE = "0";
