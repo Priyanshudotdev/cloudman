@@ -13,10 +13,9 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-
+import { DeploymentHistory } from "@/components/deployments/deployment-history";
 import type { ProjectDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
-import { DeploymentHistory } from "@/components/deployments/deployment-history";
 
 export function ProjectHome() {
 	const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -90,7 +89,9 @@ export function ProjectHome() {
 				},
 			);
 			setProjects((current) =>
-				current.map((item) => (item._id === project._id ? result.project : item)),
+				current.map((item) =>
+					item._id === project._id ? result.project : item,
+				),
 			);
 			setEditingProjectId(null);
 			toast.success("Project updated");

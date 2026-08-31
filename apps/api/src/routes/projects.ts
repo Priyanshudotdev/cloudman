@@ -232,8 +232,10 @@ export function createProjectsRoute(
 			return c.json({ error: "Invalid version" }, 400);
 		const version = Number(versionParam);
 
-		const graphVersion = await GraphVersion.findOne({ projectId: id, version })
-			.lean();
+		const graphVersion = await GraphVersion.findOne({
+			projectId: id,
+			version,
+		}).lean();
 		return c.json({ graphVersion: graphVersion ?? null });
 	});
 

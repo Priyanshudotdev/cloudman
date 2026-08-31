@@ -3,10 +3,10 @@
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
 import { Skeleton } from "@my-better-t-app/ui/components/skeleton";
+import { cn } from "@my-better-t-app/ui/lib/utils";
 import { RotateCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@my-better-t-app/ui/lib/utils";
 
 import type { DeploymentDto } from "@/lib/api";
 import { api } from "@/lib/api";
@@ -108,9 +108,7 @@ export function DeploymentHistory({
 						onClick={() => void load()}
 						aria-label="Refresh deployments"
 					>
-						<RotateCw
-							className={cn("size-4", refreshing && "animate-spin")}
-						/>
+						<RotateCw className={cn("size-4", refreshing && "animate-spin")} />
 					</Button>
 					<Button variant="ghost" size="sm" onClick={onClose}>
 						Close
@@ -147,8 +145,7 @@ export function DeploymentHistory({
 										<span
 											className={cn(
 												"font-medium",
-												deployment.action === "destroy" &&
-													"text-destructive",
+												deployment.action === "destroy" && "text-destructive",
 											)}
 										>
 											{deployment.action === "destroy"
@@ -167,7 +164,7 @@ export function DeploymentHistory({
 								</button>
 
 								{isOpen && (
-									<div className="pb-3 text-xs space-y-2">
+									<div className="space-y-2 pb-3 text-xs">
 										<div className="grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
 											<span>
 												Region:{" "}
@@ -229,8 +226,7 @@ export function DeploymentHistory({
 														<span
 															className={cn(
 																"shrink-0 tabular-nums",
-																levelIcon[event.level] ??
-																	levelIcon.info,
+																levelIcon[event.level] ?? levelIcon.info,
 															)}
 														>
 															{new Date(event.at).toLocaleTimeString()}

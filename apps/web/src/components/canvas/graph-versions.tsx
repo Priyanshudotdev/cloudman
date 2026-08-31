@@ -2,13 +2,12 @@
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
+import { cn } from "@my-better-t-app/ui/lib/utils";
 import { History, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@my-better-t-app/ui/lib/utils";
-
-import type { GraphJson } from "@/lib/graph-types";
 import { api } from "@/lib/api";
+import type { GraphJson } from "@/lib/graph-types";
 
 interface VersionSummary {
 	_id: string;
@@ -27,10 +26,8 @@ export function GraphVersions({
 }) {
 	const [versions, setVersions] = useState<VersionSummary[] | null>(null);
 	const [current, setCurrent] = useState<string | null>(null);
-	const [loading, setLoading] = useState(true);
 
 	const load = useCallback(async () => {
-		setLoading(true);
 		try {
 			const result = await api<{ versions: VersionSummary[] }>(
 				`/api/projects/${projectId}/graphs`,
@@ -40,8 +37,6 @@ export function GraphVersions({
 			toast.error(
 				error instanceof Error ? error.message : "Failed to load versions",
 			);
-		} finally {
-			setLoading(false);
 		}
 	}, [projectId]);
 
@@ -120,7 +115,7 @@ export function GraphVersions({
 												{new Date(version.createdAt).toLocaleString()}
 											</span>
 										</span>
-										<span className="text-xs text-muted-foreground">
+										<span className="text-muted-foreground text-xs">
 											{current === version._id ? "Loading..." : "Load"}
 										</span>
 									</button>

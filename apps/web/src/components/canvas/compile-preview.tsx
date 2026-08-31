@@ -2,10 +2,10 @@
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
+import { cn } from "@my-better-t-app/ui/lib/utils";
 import { Check, Copy, FileCode2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { cn } from "@my-better-t-app/ui/lib/utils";
 
 import type { CompileResultDto } from "@/lib/api";
 
@@ -16,9 +16,7 @@ export function CompilePreview({
 	result: CompileResultDto;
 	onClose: () => void;
 }) {
-	const [selectedPath, setSelectedPath] = useState(
-		result.files[0]?.path ?? "",
-	);
+	const [selectedPath, setSelectedPath] = useState(result.files[0]?.path ?? "");
 	const [copied, setCopied] = useState(false);
 
 	const selected = useMemo(
@@ -84,7 +82,7 @@ export function CompilePreview({
 
 					<div className="flex min-w-0 flex-1 flex-col">
 						<div className="flex items-center justify-between gap-2 border-b px-3 py-1.5">
-							<span className="truncate font-mono text-xs text-muted-foreground">
+							<span className="truncate font-mono text-muted-foreground text-xs">
 								{selected?.path ?? ""}
 							</span>
 							<Button

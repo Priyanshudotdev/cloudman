@@ -344,8 +344,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 				<span className="font-semibold text-sm">{projectName}</span>
 				{version > 0 && <Badge variant="secondary">v{version}</Badge>}
 				<span className="text-muted-foreground text-xs">
-					{nodes.length} resource{nodes.length === 1 ? "" : "s"} · {edges.length}{" "}
-					connection{edges.length === 1 ? "" : "s"}
+					{nodes.length} resource{nodes.length === 1 ? "" : "s"} ·{" "}
+					{edges.length} connection{edges.length === 1 ? "" : "s"}
 				</span>
 				<div className="ml-auto flex items-center gap-2">
 					<Button
@@ -464,10 +464,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					)}
 
 					{preview && (
-						<CompilePreview
-							result={preview}
-							onClose={() => setPreview(null)}
-						/>
+						<CompilePreview result={preview} onClose={() => setPreview(null)} />
 					)}
 
 					{versionsOpen && (

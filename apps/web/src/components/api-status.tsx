@@ -41,9 +41,7 @@ export function ApiStatus() {
 		state === "loading" ? (
 			<Badge variant="secondary">Checking…</Badge>
 		) : state === "ok" ? (
-			<Badge variant="default">
-				Online {service ? `(${service})` : ""}
-			</Badge>
+			<Badge variant="default">Online {service ? `(${service})` : ""}</Badge>
 		) : (
 			<Badge variant="destructive">Unreachable</Badge>
 		);
