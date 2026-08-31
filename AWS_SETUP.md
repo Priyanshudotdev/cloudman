@@ -69,7 +69,7 @@ Start with this broad policy and tighten `Resource` for production:
         "ec2:RunInstances", "ec2:TerminateInstances", "ec2:ModifyInstanceAttribute",
         "elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:DeleteLoadBalancer",
         "elasticloadbalancing:CreateTargetGroup", "elasticloadbalancing:DeleteTargetGroup",
-        "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListeners",
+        "elasticloadbalancing:CreateListener", "elasticloadbalancing:DeleteListener",
         "elasticloadbalancing:Describe*",
         "s3:CreateBucket", "s3:DeleteBucket", "s3:ListBucket", "s3:Get*",
         "s3:PutBucketVersioning", "s3:PutEncryptionConfiguration",
@@ -87,16 +87,32 @@ Start with this broad policy and tighten `Resource` for production:
         "ecs:Describe*",
         "iam:CreateRole", "iam:DeleteRole", "iam:AttachRolePolicy",
         "iam:DetachRolePolicy", "iam:PutRolePolicy", "iam:DeleteRolePolicy",
-        "iam:PassRole", "iam:GetRole", "iam:CreateInstanceProfile",
+        "iam:GetRole", "iam:CreateInstanceProfile",
         "iam:DeleteInstanceProfile", "iam:AddRoleToInstanceProfile",
         "iam:RemoveRoleFromInstanceProfile",
         "sts:GetCallerIdentity"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "CloudManPassRole",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/*",
+      "Condition": {
+        "StringLike": {
+          "iam:PassedToService": ["ec2.amazonaws.com", "ecs-tasks.amazonaws.com"]
+        }
+      }
     }
   ]
 }
 ```
+
+> The `iam:PassRole` entry is scoped with a service condition to avoid the
+> wildcard-permissiveness warning. If you don't use EC2 or ECS, you can delete
+> that `CloudManPassRole` statement entirely.
+
 
 > The `sts:GetCallerIdentity` permission is needed for CloudMan's **Verify**
 > button to confirm the trust chain end-to-end.
