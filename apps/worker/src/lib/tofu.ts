@@ -1,12 +1,22 @@
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, rename, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { env } from "@my-better-t-app/env/worker";
 
 const TOFU_VERSION = "1.9.0";
+
+function platformTriple(): { os: string; arch: string; ext: string } {
+	const p = os.platform();
+	const a = os.arch();
+	const ext = p === "win32" ? ".exe" : "";
+	const osName =
+		p === "win32" ? "windows" : p === "darwin" ? "darwin" : "linux";
+	const archName = a === "arm64" ? "arm64" : a === "x64" ? "amd64" : a;
+	return { os: osName, arch: archName, ext };
+}
 
 export interface TofuRunOptions {
 	cwd: string;
@@ -101,8 +111,9 @@ async function autoInstallTofu(): Promise<string> {
 		);
 	}
 
+	const { os: goos, arch, ext } = platformTriple();
 	const installDir = path.join(os.homedir(), ".cloudman", "bin");
-	const binaryPath = path.join(installDir, "tofu.exe");
+	const binaryPath = path.join(installDir, `tofu${ext}`);
 
 	if (
 		await stat(binaryPath).then(
@@ -113,8 +124,10 @@ async function autoInstallTofu(): Promise<string> {
 		if (await commandExists(binaryPath)) return binaryPath;
 	}
 
-	console.log(`[worker] downloading OpenTofu v${TOFU_VERSION}...`);
-	const url = `https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_windows_amd64.zip`;
+	console.log(
+		`[worker] downloading OpenTofu v${TOFU_VERSION} (${goos}/${arch})...`,
+	);
+	const url = `https://github.com/opentofu/opentofu/releases/download/v${TOFU_VERSION}/tofu_${TOFU_VERSION}_${goos}_${arch}.zip`;
 	const response = await fetch(url);
 	if (!response.ok || !response.body) {
 		throw new Error(
@@ -131,25 +144,43 @@ async function autoInstallTofu(): Promise<string> {
 
 	const extractDir = path.join(os.tmpdir(), `tofu-extract-${TOFU_VERSION}`);
 	await rm(extractDir, { recursive: true, force: true });
-	await new Promise<void>((resolve, reject) => {
-		const ps = spawn(
-			"powershell.exe",
-			[
-				"-NoProfile",
-				"-Command",
-				`Expand-Archive -Force -LiteralPath '${zipPath}' -DestinationPath '${extractDir}'`,
-			],
-			{ stdio: "ignore" },
-		);
-		ps.on("close", (code) =>
-			code === 0
-				? resolve()
-				: reject(new Error(`Expand-Archive exited ${code}`)),
-		);
-		ps.on("error", reject);
-	});
 
-	await rename(path.join(extractDir, "tofu.exe"), binaryPath);
+	if (goos === "windows") {
+		await new Promise<void>((resolve, reject) => {
+			const ps = spawn(
+				"powershell.exe",
+				[
+					"-NoProfile",
+					"-Command",
+					`Expand-Archive -Force -LiteralPath '${zipPath}' -DestinationPath '${extractDir}'`,
+				],
+				{ stdio: "ignore" },
+			);
+			ps.on("close", (code) =>
+				code === 0
+					? resolve()
+					: reject(new Error(`Expand-Archive exited ${code}`)),
+			);
+			ps.on("error", reject);
+		});
+	} else {
+		await new Promise<void>((resolve, reject) => {
+			const unzip = spawn("unzip", ["-o", zipPath, "-d", extractDir], {
+				stdio: "ignore",
+			});
+			unzip.on("close", (code) =>
+				code === 0 ? resolve() : reject(new Error(`unzip exited ${code}`)),
+			);
+			unzip.on("error", reject);
+		});
+	}
+
+	await rename(path.join(extractDir, `tofu${ext}`), binaryPath);
+
+	if (goos !== "windows") {
+		await chmod(binaryPath, 0o755);
+	}
+
 	console.log(`[worker] OpenTofu installed at ${binaryPath}`);
 	return binaryPath;
 }
