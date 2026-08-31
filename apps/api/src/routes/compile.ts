@@ -1,4 +1,4 @@
-import { buildIR, compileIR } from "@my-better-t-app/core";
+import { analyzeRisks, buildIR, compileIR, estimateCost } from "@my-better-t-app/core";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { type AppEnv, requireAuth } from "../lib/session";
@@ -41,6 +41,8 @@ export function createCompileRoute(
 			parsed.data.bucketNameSuffix ??
 			Math.random().toString(16).slice(2, 10).padEnd(8, "0");
 		const files = compileIR(built.document, { bucketNameSuffix: suffix });
+		const cost = estimateCost(built.document);
+		const risks = analyzeRisks(built.document);
 
 		return c.json({
 			ir: built.document,
@@ -50,6 +52,8 @@ export function createCompileRoute(
 				files: files.length,
 				bytes: files.reduce((sum, f) => sum + f.contents.length, 0),
 			},
+			cost,
+			risks,
 		});
 	});
 	return compileRoute;

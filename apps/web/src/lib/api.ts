@@ -107,7 +107,33 @@ export interface DeploymentDto {
 	createdAt: string;
 }
 
+export interface CostResourceDto {
+	irId: string;
+	kind: string;
+	label: string;
+	monthly: number;
+	notes: string[];
+	share: number;
+}
+
+export interface CostReportDto {
+	monthlyTotal: number;
+	resources: CostResourceDto[];
+	topSpenders: string[];
+}
+
+export interface RiskDto {
+	irId: string;
+	kind: string;
+	label: string;
+	severity: "low" | "medium" | "high";
+	code: string;
+	message: string;
+}
+
 export interface CompileResultDto {
 	stats: { resources: number; files: number; bytes: number };
 	files: Array<{ path: string; contents: string }>;
+	cost: CostReportDto;
+	risks: RiskDto[];
 }

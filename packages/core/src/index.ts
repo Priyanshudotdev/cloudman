@@ -1,5 +1,19 @@
 export type { CompiledFile, CompileOptions } from "./compiler";
 export { compileIR } from "./compiler";
+export type {
+	CostEstimate,
+	CostReport,
+	ResourceCostRow,
+	ResourceRisk,
+	RiskSeverity,
+} from "./cost";
+export {
+	analyzeRisks,
+	estimateCost,
+	estimateResource,
+	roundMoney,
+} from "./cost";
+export { MONTH_HOURS } from "./cost/pricing";
 export * from "./graph/cidr";
 export * from "./graph/dependencies";
 export type { NodeRefs } from "./graph/refs";

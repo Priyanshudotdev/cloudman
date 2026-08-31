@@ -239,6 +239,55 @@ describe("api compile preview", () => {
 		expect(main).toContain('resource "aws_instance" "web-1"');
 	});
 
+	test("returns a cost estimate and risk review alongside files", async () => {
+		const res = await request(app, "POST", "/api/compile", {
+			graph: validGraph(),
+			region: "us-east-1",
+		});
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			cost: {
+				monthlyTotal: number;
+				resources: Array<{ irId: string; monthly: number }>;
+				topSpenders: string[];
+			};
+			risks: Array<{ code: string; severity: string }>;
+		};
+		expect(body.cost.resources).toHaveLength(8);
+		expect(body.cost.monthlyTotal).toBeCloseTo(0.0104 * 730 + 8 * 0.08, 2);
+		expect(body.cost.topSpenders).toContain("web-1");
+		expect(Array.isArray(body.risks)).toBe(true);
+	});
+
+	test("surfaces cost and security warnings as risks", async () => {
+		const graph = {
+			version: 1,
+			name: "risky-stack",
+			nodes: [
+				{ id: "vpc-1", type: "aws_vpc", config: { cidrBlock: "10.0.0.0/16" } },
+				{
+					id: "subnet-1",
+					type: "aws_subnet",
+					config: { cidrBlock: "10.0.1.0/24" },
+				},
+				{ id: "nat-1", type: "aws_nat_gateway", config: {} },
+				{ id: "bucket-1", type: "aws_s3", config: { versioning: false } },
+			],
+			edges: [
+				{ source: "subnet-1", target: "vpc-1" },
+				{ source: "nat-1", target: "subnet-1" },
+			],
+		};
+		const res = await request(app, "POST", "/api/compile", { graph });
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			risks: Array<{ code: string }>;
+		};
+		const codes = body.risks.map((r) => r.code);
+		expect(codes).toContain("S3_NO_VERSIONING");
+		expect(codes).toContain("NAT_COST_HOTSPOT");
+	});
+
 	test("rejects an invalid graph with 422", async () => {
 		const graph = validGraph();
 		(graph.nodes as Array<Record<string, unknown>>).push({
