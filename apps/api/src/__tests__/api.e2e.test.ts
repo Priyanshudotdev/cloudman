@@ -295,6 +295,45 @@ describe("api projects + graph versions", () => {
 		expect(gone.status).toBe(200);
 	});
 
+	test("lists saved graph versions and fetches a specific one", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "versions",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+
+		const listed = await json(
+			await request(app, "GET", `/api/projects/${project._id}/graphs`),
+		);
+		const versions = listed.versions as Array<{ version: number }>;
+		expect(versions.length).toBe(1);
+		expect(versions[0]?.version).toBe(1);
+
+		const fetched = await json(
+			await request(app, "GET", `/api/projects/${project._id}/graphs/1`),
+		);
+		const graphVersion = fetched.graphVersion as {
+			version: number;
+			graph: { nodes: unknown[] };
+		};
+		expect(graphVersion.version).toBe(1);
+		expect(graphVersion.graph.nodes.length).toBe(4);
+
+		const missing = await json(
+			await request(app, "GET", `/api/projects/${project._id}/graphs/99`),
+		);
+		expect(missing.graphVersion).toBeNull();
+
+		const bad = await request(
+			app,
+			"GET",
+			`/api/projects/${project._id}/graphs/not-a-number`,
+		);
+		expect(bad.status).toBe(400);
+	});
+
 	test("rejects an invalid graph save", async () => {
 		const created = await request(app, "POST", "/api/projects", {
 			name: "bad-graph",

@@ -28,6 +28,7 @@ import type {
 	ValidationIssueDto,
 } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
+import type { GraphJson } from "@/lib/graph-types";
 import {
 	defaultConfig,
 	RESOURCE_SPECS,
@@ -36,21 +37,10 @@ import {
 import { CompilePreview } from "./compile-preview";
 import { ConfigPanel } from "./config-panel";
 import { DeployPanel } from "./deploy-panel";
+import { GraphVersions } from "./graph-versions";
 import { type ResourceFlowNode, ResourceNode } from "./resource-node";
 
 const nodeTypes = { resource: ResourceNode };
-
-interface GraphJson {
-	version: number;
-	name: string;
-	nodes: Array<{
-		id: string;
-		type: string;
-		label?: string;
-		config?: Record<string, unknown>;
-	}>;
-	edges: Array<{ source: string; target: string; id?: string }>;
-}
 
 function makeNodeId(prefix: string, existing: Set<string>): string {
 	let counter = 1;
@@ -128,6 +118,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		"provision",
 	);
 	const [preview, setPreview] = useState<CompileResultDto | null>(null);
+	const [versionsOpen, setVersionsOpen] = useState(false);
 
 	useEffect(() => {
 		async function load() {
@@ -313,6 +304,22 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		setDeployOpen(true);
 	}
 
+	function handleVersionLoad(graph: GraphJson, loadedVersion: number) {
+		const flow = flowFromGraph({
+			...graph,
+			version: 1,
+			name: projectName || "Untitled infrastructure",
+			nodes: graph.nodes ?? [],
+			edges: graph.edges ?? [],
+		});
+		setNodes(flow.nodes);
+		setEdges(flow.edges);
+		setSelectedId(null);
+		setIssues([]);
+		setPreview(null);
+		toast.success(`Loaded version ${loadedVersion} (unsaved)`);
+	}
+
 	const selectedSpec: ResourceUiSpec | null = selectedNode
 		? (RESOURCE_SPECS[selectedNode.data.resourceType] ?? null)
 		: null;
@@ -337,6 +344,14 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 				<span className="font-semibold text-sm">{projectName}</span>
 				{version > 0 && <Badge variant="secondary">v{version}</Badge>}
 				<div className="ml-auto flex items-center gap-2">
+					<Button
+						variant="ghost"
+						size="sm"
+						disabled={busy}
+						onClick={() => setVersionsOpen(true)}
+					>
+						Versions
+					</Button>
 					<Button
 						variant="outline"
 						size="sm"
@@ -448,6 +463,14 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						<CompilePreview
 							result={preview}
 							onClose={() => setPreview(null)}
+						/>
+					)}
+
+					{versionsOpen && (
+						<GraphVersions
+							projectId={projectId}
+							onLoad={handleVersionLoad}
+							onClose={() => setVersionsOpen(false)}
 						/>
 					)}
 				</div>

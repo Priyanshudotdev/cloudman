@@ -222,6 +222,21 @@ export function createProjectsRoute(
 		return c.json({ versions });
 	});
 
+	projectsRoute.get("/:id/graphs/:version", async (c) => {
+		const id = c.req.param("id");
+		const project = await loadOwnedProject(c, id);
+		if (!project) return c.json({ error: "Not found" }, 404);
+
+		const versionParam = c.req.param("version");
+		if (!/^\d+$/.test(versionParam))
+			return c.json({ error: "Invalid version" }, 400);
+		const version = Number(versionParam);
+
+		const graphVersion = await GraphVersion.findOne({ projectId: id, version })
+			.lean();
+		return c.json({ graphVersion: graphVersion ?? null });
+	});
+
 	const createDeploymentSchema = z.object({
 		awsConnectionId: z
 			.string()
