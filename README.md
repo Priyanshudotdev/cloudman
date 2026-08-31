@@ -85,12 +85,17 @@ without touching AWS.
 ## Using CloudMan
 
 1. Sign up at `http://localhost:3001/login`
-2. Create a project from the dashboard
-3. Drag **EC2**, **S3**, **VPC**, **Subnet** and **Security Group** nodes onto the
-   canvas, connect dependencies (arrow = "depends on"), configure each node in
-   the side panel
+2. Create a project from the dashboard (a stat card row shows aggregate
+   projects, deployments, success rate, and resources under management)
+3. **Describe a stack in the toolbar** (e.g. "serverless api with lambda") and
+   hit **Generate** — a curated blueprint is loaded onto the canvas,
+   optionally LLM-backed when `OPENROUTER_API_KEY` + `CLOUDMAN_LLM_GENERATION=1`
+   are configured. Or drag **EC2**, **S3**, **VPC**, **Subnet** and **Security
+   Group** nodes onto the canvas, connect dependencies (arrow = "depends on"),
+   configure each node in the side panel
 4. **Validate** compiles the graph to OpenTofu server-side, reports any issues,
-   and opens a preview of the generated `.tf` files (browse per file + copy)
+   and opens a preview of the generated `.tf` files with an estimated **~$/mo
+   cost breakdown** and a **security/ops risk review** (browse per file + copy)
 5. **Versions** lists every immutable graph snapshot and lets you load any past
    version back onto the canvas
 6. **Save** stores a new immutable graph version
@@ -101,6 +106,7 @@ without touching AWS.
    - you approve → worker runs `tofu apply` streaming progress until completion
 8. Project cards show **History**, a browsable deployment history with status
    badges and full event logs; projects can be renamed/edited in place
+9. The dashboard analytics endpoint (`GET /api/analytics`) powers the stat cards
 
 #### Networking wiring rules
 
@@ -196,11 +202,13 @@ the local workspace instead.
 
 ## Verification status
 
-- **74 tests across 3 suites**, all green via `bunx turbo run test`:
-  - `packages/core`: 46 unit tests (validation, cycles, topological order, IR
-    defaults, CIDR math, networking wiring rules, compiled HCL assertions)
-  - `apps/api`: 21 e2e tests (auth, compile preview, projects + updates, graph
-    versions, AWS connections, full deployment lifecycle, guarded deletes/cancel)
+- **101 tests across 3 suites**, all green via `bunx turbo run test`:
+  - `packages/core`: 66 unit tests (validation, cycles, topological order, IR
+    defaults, CIDR math, networking wiring rules, compiled HCL assertions,
+    cost estimation & risk analysis, blueprint generation)
+  - `apps/api`: 27 e2e tests (auth, compile preview, cost/risk, stack generation,
+    projects + updates, graph versions, AWS connections, full deployment
+    lifecycle, guarded deletes/cancel, dashboard analytics, route53 records)
   - `apps/worker`: 8 mock-job tests (plan/apply provisioning, destroy, skips)
 - `bunx turbo run check-types` passes across all 6 packages; Biome clean
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
@@ -218,8 +226,9 @@ the local workspace instead.
 
 ## Roadmap
 
-- Cost estimation & risk analysis on plans
-- AI-assisted graph generation (natural language → infrastructure graph)
+- Real AWS/prod operations (deploys currently run against a mock boundary;
+  real-mode connection verification is validated up to the AWS API call)
+- CloudFormation/CDK-style IaC export alongside the generated OpenTofu plan
 
 ## Scripts
 

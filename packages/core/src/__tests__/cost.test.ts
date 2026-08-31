@@ -88,9 +88,9 @@ describe("estimateCost", () => {
 		const { document } = build([web]);
 		const report = estimateCost(document);
 		expect(report.resources).toHaveLength(1);
-		const row = report.resources[0]!;
-		expect(row.monthly).toBeCloseTo(0.0104 * 730 + 8 * 0.08, 2);
-		expect(report.monthlyTotal).toBeCloseTo(row.monthly, 2);
+		const row = report.resources[0];
+		expect(row?.monthly).toBeCloseTo(0.0104 * 730 + 8 * 0.08, 2);
+		expect(report.monthlyTotal).toBeCloseTo(row?.monthly ?? 0, 2);
 		expect(report.topSpenders).toContain("web-1");
 	});
 

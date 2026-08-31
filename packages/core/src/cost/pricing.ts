@@ -85,7 +85,8 @@ export function estimateResource(
 		case "aws_instance": {
 			const hourlyRate =
 				instanceHourly[str(a.instance_type) ?? ""] ??
-				instanceHourly["t3.micro"] ?? 0;
+				instanceHourly["t3.micro"] ??
+				0;
 			const volumeGb = num(a.volume_size_gb) ?? 8;
 			const monthly = hourlyRate * MONTH_HOURS + volumeGb * GP3_GB_MONTHLY;
 			notes.push(
@@ -112,8 +113,7 @@ export function estimateResource(
 			const hourlyRate =
 				dbHourly[str(a.instance_class) ?? ""] ?? dbHourly["db.t3.micro"] ?? 0;
 			const storageGb = num(a.allocated_storage_gb) ?? 20;
-			const monthly =
-				hourlyRate * MONTH_HOURS + storageGb * GP3_GB_MONTHLY;
+			const monthly = hourlyRate * MONTH_HOURS + storageGb * GP3_GB_MONTHLY;
 			notes.push(
 				`${str(a.instance_class) ?? "db.t3.micro"} × 730h = $${round(hourlyRate * MONTH_HOURS)}`,
 				`${storageGb} GB storage = $${round(storageGb * GP3_GB_MONTHLY)}`,
@@ -123,7 +123,8 @@ export function estimateResource(
 		case "aws_rds_cluster": {
 			const hourlyRate =
 				auroraHourly[str(a.instance_class) ?? ""] ??
-				auroraHourly["db.t4g.medium"] ?? 0;
+				auroraHourly["db.t4g.medium"] ??
+				0;
 			const monthly = hourlyRate * MONTH_HOURS;
 			notes.push(
 				`${str(a.instance_class) ?? "db.t4g.medium"} × 730h = $${round(monthly)} (storage billed per GB used)`,
@@ -132,7 +133,9 @@ export function estimateResource(
 		}
 		case "aws_elasticache_cluster": {
 			const hourlyRate =
-				cacheHourly[str(a.node_type) ?? ""] ?? cacheHourly["cache.t3.micro"] ?? 0;
+				cacheHourly[str(a.node_type) ?? ""] ??
+				cacheHourly["cache.t3.micro"] ??
+				0;
 			const nodes = num(a.num_cache_nodes) ?? 1;
 			const monthly = hourlyRate * MONTH_HOURS * nodes;
 			notes.push(
