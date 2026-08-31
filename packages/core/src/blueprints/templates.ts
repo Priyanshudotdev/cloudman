@@ -127,6 +127,83 @@ function serverlessApiGraph(): InfrastructureGraph {
 	};
 }
 
+function reactAppGraph(): InfrastructureGraph {
+	return {
+		version: 1,
+		name: "react-app",
+		nodes: [
+			{ id: "vpc-1", type: "aws_vpc", config: { cidrBlock: "10.0.0.0/16" } },
+			{
+				id: "subnet-pub",
+				type: "aws_subnet",
+				config: { cidrBlock: "10.0.1.0/24" },
+			},
+			{
+				id: "subnet-priv",
+				type: "aws_subnet",
+				config: { cidrBlock: "10.0.2.0/24" },
+			},
+			{ id: "igw-1", type: "aws_internet_gateway", config: {} },
+			{
+				id: "sg-web",
+				type: "aws_security_group",
+				config: {
+					description: "public web tier for react app",
+					ingressRules: [
+						{
+							fromPort: 80,
+							toPort: 80,
+							protocol: "tcp",
+							cidrBlock: "0.0.0.0/0",
+						},
+						{
+							fromPort: 443,
+							toPort: 443,
+							protocol: "tcp",
+							cidrBlock: "0.0.0.0/0",
+						},
+					],
+				},
+			},
+			{ id: "repo-1", type: "aws_ecr", config: {} },
+			{
+				id: "role-1",
+				type: "aws_iam_role",
+				config: { assumeService: "ecs-tasks" },
+			},
+			{ id: "alb-1", type: "aws_alb", config: { scheme: "internet-facing" } },
+			{
+				id: "svc-1",
+				type: "aws_ecs",
+				config: {
+					cpu: "0.25 vCPU",
+					memory: "0.5 GB",
+					containerPort: 80,
+					desiredCount: 1,
+					imageTag: "latest",
+				},
+			},
+		],
+		edges: [
+			edge("subnet-pub", "vpc-1"),
+			edge("subnet-priv", "vpc-1"),
+			edge("igw-1", "vpc-1"),
+			edge("sg-web", "vpc-1"),
+			edge("repo-1", "vpc-1"),
+			edge("role-1", "vpc-1"),
+			edge("svc-1", "subnet-pub"),
+			edge("svc-1", "subnet-priv"),
+			edge("svc-1", "sg-web"),
+			edge("svc-1", "repo-1"),
+			edge("svc-1", "role-1"),
+			edge("alb-1", "subnet-pub"),
+			edge("alb-1", "subnet-priv"),
+			edge("alb-1", "sg-web"),
+			edge("alb-1", "svc-1"),
+		],
+	};
+}
+
 function dataPipelineGraph(): InfrastructureGraph {
 	return {
 		version: 1,
@@ -189,6 +266,15 @@ const graphs: Record<string, BlueprintGraph> = {
 		},
 		build: dataPipelineGraph,
 	},
+	"react-app": {
+		metadata: {
+			id: "react-app",
+			name: "React App",
+			description: "Containerized React app on ECS Fargate behind an ALB",
+			tags: ["react", "react app", "frontend", "spa", "container", "ecs"],
+		},
+		build: reactAppGraph,
+	},
 };
 
 export const DEFAULT_BLUEPRINT = "web-app";
@@ -232,4 +318,13 @@ export function generateGraphFromPrompt(prompt: string): {
 		`Generated from the "${blueprint.metadata.name}" template; edit nodes before saving.`,
 	];
 	return { blueprint: blueprintId, graph, warnings };
+}
+
+/** Build a fresh graph from a blueprint id (throws for unknown ids). */
+export function buildBlueprint(id: string): InfrastructureGraph {
+	const blueprint = graphs[id];
+	if (!blueprint) {
+		throw new Error(`Unknown blueprint "${id}"`);
+	}
+	return structuredClone(blueprint.build());
 }

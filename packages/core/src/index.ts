@@ -1,5 +1,6 @@
 export type { Blueprint, GenerateResult } from "./blueprints";
 export {
+	buildBlueprint,
 	DEFAULT_BLUEPRINT,
 	generateGraphFromPrompt,
 	listBlueprints,

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildIR, generateGraphFromPrompt, listBlueprints } from "../index";
+import {
+	buildBlueprint,
+	buildIR,
+	generateGraphFromPrompt,
+	listBlueprints,
+} from "../index";
 
 describe("listBlueprints", () => {
 	test("advertises curated stack templates", () => {
@@ -8,10 +13,31 @@ describe("listBlueprints", () => {
 		expect(ids).toContain("web-app");
 		expect(ids).toContain("serverless-api");
 		expect(ids).toContain("data-pipeline");
+		expect(ids).toContain("react-app");
 		for (const b of listBlueprints()) {
 			expect(b.tags.length).toBeGreaterThan(0);
 			expect(b.description.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe("buildBlueprint", () => {
+	test("loads a fresh graph by id", () => {
+		const graph = buildBlueprint("react-app");
+		const types = graph.nodes.map((n) => n.type);
+		expect(types).toContain("aws_ecs");
+		expect(types).toContain("aws_alb");
+		expect(types).toContain("aws_ecr");
+		expect(graph.edges.length).toBeGreaterThan(0);
+	});
+
+	test("throws for unknown ids", () => {
+		expect(() => buildBlueprint("does-not-exist")).toThrow();
+	});
+
+	test("react-app template matches a react/frontend prompt", () => {
+		const result = generateGraphFromPrompt("deploy my react app");
+		expect(result.blueprint).toBe("react-app");
 	});
 });
 
