@@ -79,6 +79,14 @@ export interface AwsConnectionDto {
 	createdAt: string;
 }
 
+export interface DeploymentEventDto {
+	at: string;
+	level: "info" | "success" | "error" | "progress";
+	message: string;
+	status?: string;
+	data?: unknown;
+}
+
 export interface DeploymentDto {
 	_id: string;
 	projectId: string;
@@ -92,8 +100,10 @@ export interface DeploymentDto {
 		destroy: number;
 		resources: DeploymentResourceDto[];
 	};
+	events?: DeploymentEventDto[];
 	startedAt?: string;
 	completedAt?: string;
+	error?: string;
 	createdAt: string;
 }
 

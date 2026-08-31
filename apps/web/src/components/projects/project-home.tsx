@@ -16,12 +16,14 @@ import { toast } from "sonner";
 
 import type { ProjectDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
+import { DeploymentHistory } from "@/components/deployments/deployment-history";
 
 export function ProjectHome() {
 	const [projects, setProjects] = useState<ProjectDto[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [newName, setNewName] = useState("");
 	const [creating, setCreating] = useState(false);
+	const [historyProjectId, setHistoryProjectId] = useState<string | null>(null);
 
 	const loadProjects = useCallback(async () => {
 		try {
@@ -114,44 +116,65 @@ export function ProjectHome() {
 			) : (
 				<div className="grid gap-3">
 					{projects.map((project) => (
-						<Card key={project._id}>
-							<CardHeader className="pb-2">
-								<div className="flex items-center justify-between">
-									<CardTitle className="text-base">{project.name}</CardTitle>
-									{project.latestGraphVersion > 0 && (
-										<span className="rounded bg-muted px-2 py-0.5 text-muted-foreground text-xs">
-											v{project.latestGraphVersion}
-										</span>
+						<div key={project._id}>
+							<Card>
+								<CardHeader className="pb-2">
+									<div className="flex items-center justify-between">
+										<CardTitle className="text-base">{project.name}</CardTitle>
+										{project.latestGraphVersion > 0 && (
+											<span className="rounded bg-muted px-2 py-0.5 text-muted-foreground text-xs">
+												v{project.latestGraphVersion}
+											</span>
+										)}
+									</div>
+									{project.description && (
+										<CardDescription>{project.description}</CardDescription>
 									)}
-								</div>
-								{project.description && (
-									<CardDescription>{project.description}</CardDescription>
-								)}
-							</CardHeader>
-							<CardContent className="flex items-center justify-between pb-3">
-								<span className="text-muted-foreground text-xs">
-									Updated {new Date(project.updatedAt).toLocaleString()}
-								</span>
-								<div className="flex gap-2">
-									<Link
-										href={`/projects/${project._id}` as Route}
-										className={buttonVariants({
-											variant: "outline",
-											size: "sm",
-										})}
-									>
-										Open canvas
-									</Link>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => void deleteProject(project)}
-									>
-										Delete
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
+								</CardHeader>
+								<CardContent className="flex items-center justify-between pb-3">
+									<span className="text-muted-foreground text-xs">
+										Updated {new Date(project.updatedAt).toLocaleString()}
+									</span>
+									<div className="flex gap-2">
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() =>
+												setHistoryProjectId(
+													historyProjectId === project._id
+														? null
+														: project._id,
+												)
+											}
+										>
+											History
+										</Button>
+										<Link
+											href={`/projects/${project._id}` as Route}
+											className={buttonVariants({
+												variant: "outline",
+												size: "sm",
+											})}
+										>
+											Open canvas
+										</Link>
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() => void deleteProject(project)}
+										>
+											Delete
+										</Button>
+									</div>
+								</CardContent>
+							</Card>
+							{historyProjectId === project._id && (
+								<DeploymentHistory
+									projectId={project._id}
+									onClose={() => setHistoryProjectId(null)}
+								/>
+							)}
+						</div>
 					))}
 				</div>
 			)}
