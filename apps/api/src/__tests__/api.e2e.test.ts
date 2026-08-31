@@ -394,6 +394,44 @@ describe("api generate (blueprints)", () => {
 		});
 		expect(long.status).toBe(400);
 	});
+
+	test("lists blueprint templates including the react-app template", async () => {
+		const res = await request(app, "GET", "/api/blueprints");
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			blueprints: Array<{ id: string; name: string }>;
+		};
+		const ids = body.blueprints.map((b) => b.id);
+		expect(ids).toContain("react-app");
+		expect(ids).toContain("web-app");
+		expect(ids).toContain("serverless-api");
+		expect(ids).toContain("data-pipeline");
+	});
+
+	test("loads the react-app template graph by id and compiles", async () => {
+		const res = await request(app, "GET", "/api/blueprints/react-app");
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as unknown as {
+			blueprint: string;
+			graph: { nodes: Array<{ type: string }>; edges: unknown[] };
+		};
+		expect(body.blueprint).toBe("react-app");
+		const types = body.graph.nodes.map((n) => n.type);
+		expect(types).toContain("aws_ecs");
+		expect(types).toContain("aws_alb");
+		expect(types).toContain("aws_ecr");
+		expect(body.graph.edges.length).toBeGreaterThan(0);
+
+		const compiled = await request(app, "POST", "/api/compile", {
+			graph: body.graph,
+		});
+		expect(compiled.status).toBe(200);
+	});
+
+	test("returns 404 for an unknown blueprint id", async () => {
+		const res = await request(app, "GET", "/api/blueprints/nope");
+		expect(res.status).toBe(404);
+	});
 });
 
 describe("api analytics", () => {

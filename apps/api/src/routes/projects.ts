@@ -1,4 +1,10 @@
-import { buildIR, estimateCost, validateGraph } from "@my-better-t-app/core";
+import {
+	buildBlueprint,
+	buildIR,
+	estimateCost,
+	listBlueprints,
+	validateGraph,
+} from "@my-better-t-app/core";
 import {
 	AwsConnection,
 	Deployment,
@@ -40,6 +46,7 @@ export function createProjectsRoute(
 	const createProjectSchema = z.object({
 		name: z.string().min(1).max(120),
 		description: z.string().max(500).default(""),
+		blueprint: z.string().optional(),
 	});
 
 	projectsRoute.post("/", async (c) => {
@@ -50,11 +57,44 @@ export function createProjectsRoute(
 				400,
 			);
 		}
+
+		let blueprintGraph: ReturnType<typeof buildBlueprint> | undefined;
+		if (body.data.blueprint) {
+			const known = listBlueprints().some(
+				(b) => b.id === body.data.blueprint,
+			);
+			if (!known) {
+				return c.json(
+					{ error: `Unknown blueprint "${body.data.blueprint}"` },
+					400,
+				);
+			}
+			blueprintGraph = buildBlueprint(body.data.blueprint);
+		}
+
 		const project = await Project.create({
 			name: body.data.name,
 			description: body.data.description,
 			ownerUserId: c.get("userId"),
 		});
+
+		if (blueprintGraph) {
+			try {
+				await GraphVersion.create({
+					projectId: project._id,
+					version: 1,
+					graph: blueprintGraph,
+					createdByUserId: c.get("userId"),
+				});
+				await Project.updateOne(
+					{ _id: project._id },
+					{ latestGraphVersion: 1, updatedAt: new Date() },
+				);
+			} catch (error) {
+				console.error("[api] failed to seed blueprint graph:", error);
+			}
+		}
+
 		return c.json({ project }, 201);
 	});
 

@@ -141,6 +141,13 @@ export interface CompileResultDto {
 	risks: RiskDto[];
 }
 
+export interface BlueprintDto {
+	id: string;
+	name: string;
+	description: string;
+	tags: string[];
+}
+
 export interface GenerateResultDto {
 	blueprint: string | null;
 	mode: "engine" | "llm";

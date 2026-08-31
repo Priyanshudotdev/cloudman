@@ -13,8 +13,9 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { Boxes, Sparkles } from "lucide-react";
 import { DeploymentHistory } from "@/components/deployments/deployment-history";
-import type { AnalyticsStatsDto, ProjectDto } from "@/lib/api";
+import type { AnalyticsStatsDto, BlueprintDto, ProjectDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
 
 const STAT_CARDS: Array<{
@@ -48,6 +49,22 @@ export function ProjectHome() {
 	const [editName, setEditName] = useState("");
 	const [editDescription, setEditDescription] = useState("");
 	const [savingEdit, setSavingEdit] = useState(false);
+	const [templates, setTemplates] = useState<BlueprintDto[]>([]);
+	const [templateName, setTemplateName] = useState("");
+	const [creatingTemplate, setCreatingTemplate] = useState<string | null>(
+		null,
+	);
+
+	const loadTemplates = useCallback(async () => {
+		try {
+			const result = await api<{ blueprints: BlueprintDto[] }>(
+				"/api/blueprints",
+			);
+			setTemplates(result.blueprints);
+		} catch {
+			setTemplates([]);
+		}
+	}, []);
 
 	const loadProjects = useCallback(async () => {
 		try {
@@ -74,7 +91,8 @@ export function ProjectHome() {
 	useEffect(() => {
 		void loadProjects();
 		void loadStats();
-	}, [loadProjects, loadStats]);
+		void loadTemplates();
+	}, [loadProjects, loadStats, loadTemplates]);
 
 	async function createProject() {
 		if (!newName.trim()) return;
@@ -97,6 +115,38 @@ export function ProjectHome() {
 			}
 		} finally {
 			setCreating(false);
+		}
+	}
+
+	async function createProjectFromTemplate(blueprint: BlueprintDto) {
+		if (!templateName.trim()) return;
+		setCreatingTemplate(blueprint.id);
+		try {
+			const result = await api<{ project: ProjectDto }>("/api/projects", {
+				method: "POST",
+				body: JSON.stringify({
+					name: templateName.trim(),
+					blueprint: blueprint.id,
+				}),
+			});
+			setTemplateName("");
+			toast.success(
+				`Project created from "${blueprint.name}" template — opening canvas`,
+			);
+			await loadProjects();
+			window.location.href = `/projects/${result.project._id}`;
+		} catch (error) {
+			if (error instanceof ApiError && error.issues) {
+				toast.error(error.issues.map((issue) => issue.message).join("\n"));
+			} else {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to create project from template",
+				);
+			}
+		} finally {
+			setCreatingTemplate(null);
 		}
 	}
 
@@ -194,6 +244,78 @@ export function ProjectHome() {
 					Create
 				</Button>
 			</div>
+
+			{templates.length > 0 && (
+				<div className="mb-8">
+					<div className="mb-3 flex items-center gap-2">
+						<Sparkles className="h-4 w-4 text-muted-foreground" />
+						<h2 className="font-medium text-sm">
+							Start from a template
+						</h2>
+						<span className="text-muted-foreground text-xs">
+							Creates a project pre-loaded with the stack on the canvas
+						</span>
+					</div>
+					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+						{templates.map((template) => (
+							<Card key={template.id} className="flex flex-col">
+								<CardHeader className="pb-2">
+									<div className="flex items-center gap-2">
+										<Boxes className="h-4 w-4 text-muted-foreground" />
+										<CardTitle className="text-sm">
+											{template.name}
+										</CardTitle>
+									</div>
+									{template.description && (
+										<CardDescription>{template.description}</CardDescription>
+									)}
+								</CardHeader>
+								<CardContent className="mt-auto flex flex-col gap-2 pt-0 pb-3">
+									<div className="flex flex-wrap gap-1">
+										{template.tags.slice(0, 3).map((tag) => (
+											<span
+												key={tag}
+												className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground text-[10px]"
+											>
+												{tag}
+											</span>
+										))}
+									</div>
+									<form
+										className="flex gap-1.5"
+										onSubmit={(event) => {
+											event.preventDefault();
+											void createProjectFromTemplate(template);
+										}}
+									>
+										<Input
+											aria-label={`Name for ${template.name}`}
+											placeholder="Project name"
+											value={templateName}
+											onChange={(event) =>
+												setTemplateName(event.target.value)
+											}
+											className="h-8 text-xs"
+										/>
+										<Button
+											type="submit"
+											size="sm"
+											disabled={
+												creatingTemplate === template.id ||
+												!templateName.trim()
+											}
+										>
+											{creatingTemplate === template.id
+												? "Creating…"
+												: "Use"}
+										</Button>
+									</form>
+								</CardContent>
+							</Card>
+						))}
+					</div>
+				</div>
+			)}
 
 			{loading ? (
 				<p className="text-muted-foreground text-sm">Loading projects...</p>

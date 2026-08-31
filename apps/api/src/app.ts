@@ -6,6 +6,7 @@ import { logger } from "hono/logger";
 import { type AppEnv, requireAuth } from "./lib/session";
 import { createAnalyticsRoute } from "./routes/analytics";
 import { createAwsConnectionsRoute } from "./routes/aws-connections";
+import { createBlueprintsRoute } from "./routes/blueprints";
 import { createCompileRoute } from "./routes/compile";
 import { createDeploymentsRoute } from "./routes/deployments";
 import { createGenerateRoute } from "./routes/generate";
@@ -59,6 +60,7 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.route("/api/compile", createCompileRoute(authMiddleware));
 	app.route("/api/aws-connections", createAwsConnectionsRoute(authMiddleware));
 	app.route("/api/generate", createGenerateRoute(authMiddleware));
+	app.route("/api/blueprints", createBlueprintsRoute(authMiddleware));
 
 	return app;
 }
