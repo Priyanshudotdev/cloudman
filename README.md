@@ -52,7 +52,7 @@ queued → initializing → planning → planned → awaiting_approval
 | `packages/core`       | Domain engine: graph schema, validation, dependency resolution, **CloudMan IR**, IR→OpenTofu compiler |
 | `packages/queue`      | BullMQ queue definitions + Redis pub/sub event bus                       |
 | `packages/db`         | Mongoose models (projects, graph versions, deployments, AWS connections) |
-| `packages/auth`       | Better Auth (email/password) on the MongoDB adapter                      |
+| `packages/auth`       | Better Auth (email/password, optional Google OAuth) on the MongoDB adapter |
 | `packages/env`        | Type-safe environment schemas per app (`server`, `worker`, `queue`, `db`, `web`) |
 | `packages/ui`         | Shared shadcn-style components                                           |
 
@@ -89,12 +89,18 @@ without touching AWS.
 3. Drag **EC2**, **S3**, **VPC**, **Subnet** and **Security Group** nodes onto the
    canvas, connect dependencies (arrow = "depends on"), configure each node in
    the side panel
-4. **Validate** compiles the graph to OpenTofu server-side and reports issues
-5. **Save** stores a new immutable graph version
-6. **Deploy** opens the live deployment view:
+4. **Validate** compiles the graph to OpenTofu server-side, reports any issues,
+   and opens a preview of the generated `.tf` files (browse per file + copy)
+5. **Versions** lists every immutable graph snapshot and lets you load any past
+   version back onto the canvas
+6. **Save** stores a new immutable graph version
+7. **Deploy** opens the live deployment view:
+   - pick an AWS connection (or worker default creds, dev only) and a region
    - worker validates, prepares a workspace, runs `tofu init/validate/plan`
    - plan summary (create/update/destroy counts per resource) appears for review
    - you approve → worker runs `tofu apply` streaming progress until completion
+8. Project cards show **History**, a browsable deployment history with status
+   badges and full event logs; projects can be renamed/edited in place
 
 #### Networking wiring rules
 
@@ -190,8 +196,13 @@ the local workspace instead.
 
 ## Verification status
 
-- `packages/core`: 27 unit tests (validation, cycles, topological order, IR defaults,
-  CIDR math, networking wiring rules, compiled HCL assertions) — `bun test`
+- **74 tests across 3 suites**, all green via `bunx turbo run test`:
+  - `packages/core`: 46 unit tests (validation, cycles, topological order, IR
+    defaults, CIDR math, networking wiring rules, compiled HCL assertions)
+  - `apps/api`: 21 e2e tests (auth, compile preview, projects + updates, graph
+    versions, AWS connections, full deployment lifecycle, guarded deletes/cancel)
+  - `apps/worker`: 8 mock-job tests (plan/apply provisioning, destroy, skips)
+- `bunx turbo run check-types` passes across all 6 packages; Biome clean
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
 - Full lifecycle verified end-to-end (mock mode): canvas graph → queued → planned →
   approved → completed, with persisted audit trail and live SSE events
@@ -200,6 +211,10 @@ the local workspace instead.
 - Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
   cancellation at every stage, worker-restart reconciliation, encrypted external IDs
 - Real mode verified up to the AWS boundary (graceful failure without credentials)
+
+> The api and worker e2e suites use **separate** test databases and Redis DBs
+> (`cloudman_test` / `cloudman_test_worker`) so `turbo run test` can run them in
+> parallel safely.
 
 ## Roadmap
 
@@ -212,5 +227,6 @@ the local workspace instead.
 | ------------------- | -------------------------------- |
 | `bun run check`     | Biome lint/format (write mode)   |
 | `bun run check-types` | TypeScript across all packages |
-| `bun test`          | Core domain tests                |
+| `bunx turbo run test` | All test suites (core, api, worker) |
+| `bun run dev`       | Everything via turborepo         |
 | `docker compose up -d` | Start MongoDB + Redis         |
