@@ -1,6 +1,9 @@
 import { serve } from "@hono/node-server";
+import { getClient } from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/server";
 import { createApp } from "./app";
+
+await getClient();
 
 const app = createApp();
 

@@ -29,18 +29,18 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
 	if (!spec || !nodeId) {
 		return (
-			<div className="border-l bg-card p-4 text-muted-foreground text-sm">
-				Select a resource to configure it.
+			<div className="flex w-72 shrink-0 items-start justify-center border-l border-white/10 bg-[#1e1e1e] p-6 text-sm text-white/40">
+				Select a node to configure it.
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex h-full w-72 flex-col overflow-y-auto border-l bg-card">
-			<div className="flex items-center justify-between border-b px-4 py-3">
+		<div className="flex h-full w-72 shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-[#1e1e1e] shadow-[-4px_0_16px_rgba(0,0,0,0.5)]">
+			<div className="flex items-center justify-between border-b border-white/10 bg-[#1e1e1e] px-4 py-3">
 				<div className="min-w-0">
-					<p className="font-semibold text-sm">{spec.label}</p>
-					<p className="truncate font-mono text-[11px] text-muted-foreground">
+					<p className="font-semibold text-sm text-white">{spec.label}</p>
+					<p className="truncate font-mono text-[11px] text-white/40">
 						{nodeId}
 					</p>
 				</div>
@@ -49,7 +49,7 @@ export function ConfigPanel({
 					size="sm"
 					aria-label="Remove node"
 					title="Remove node from canvas"
-					className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+					className="h-8 w-8 shrink-0 p-0 text-white/40 hover:bg-white/10 hover:text-red-400"
 					onClick={onRemove}
 					type="button"
 				>
@@ -58,11 +58,12 @@ export function ConfigPanel({
 			</div>
 			<div className="flex flex-col gap-4 p-4">
 				<div className="grid gap-1.5">
-					<Label htmlFor="node-label">Name</Label>
+					<Label htmlFor="node-label" className="text-white/80">Name</Label>
 					<Input
 						id="node-label"
 						value={nodeLabel}
 						onChange={(event) => onChangeLabel(event.target.value)}
+						className="border-white/10 bg-[#2e2e2e] text-white placeholder:text-white/30"
 					/>
 				</div>
 				{spec.fields.map((field) => (
@@ -96,8 +97,9 @@ function FieldInput({
 					id={id}
 					checked={Boolean(value)}
 					onCheckedChange={(checked) => onChange(checked === true)}
+					className="border-white/20 data-[state=checked]:bg-brand data-[state=checked]:border-brand"
 				/>
-				<Label htmlFor={id}>{field.label}</Label>
+				<Label htmlFor={id} className="text-white/80">{field.label}</Label>
 			</div>
 		);
 	}
@@ -105,10 +107,10 @@ function FieldInput({
 	if (field.type === "select") {
 		return (
 			<div className="grid gap-1.5">
-				<Label htmlFor={id}>{field.label}</Label>
+				<Label htmlFor={id} className="text-white/70">{field.label}</Label>
 				<select
 					id={id}
-					className="h-9 rounded-md border bg-background px-3 text-sm"
+					className="h-9 rounded-md border border-white/10 bg-[#2e2e2e] px-3 text-sm text-white"
 					value={String(value ?? field.default ?? "")}
 					onChange={(event) => onChange(event.target.value)}
 				>
@@ -125,10 +127,10 @@ function FieldInput({
 	if (field.type === "number") {
 		return (
 			<div className="grid gap-1.5">
-				<Label htmlFor={id}>
+				<Label htmlFor={id} className="text-white/70">
 					{field.label}{" "}
 					{field.optional ? (
-						<span className="text-muted-foreground">(optional)</span>
+						<span className="text-white/30">(optional)</span>
 					) : null}
 				</Label>
 				<Input
@@ -145,6 +147,7 @@ function FieldInput({
 								: Number(event.target.value),
 						)
 					}
+					className="border-white/10 bg-[#2e2e2e] text-white placeholder:text-white/30"
 				/>
 			</div>
 		);
@@ -156,10 +159,10 @@ function FieldInput({
 
 	return (
 		<div className="grid gap-1.5">
-			<Label htmlFor={id}>
+			<Label htmlFor={id} className="text-white/70">
 				{field.label}{" "}
 				{field.optional ? (
-					<span className="text-muted-foreground">(optional)</span>
+					<span className="text-white/30">(optional)</span>
 				) : null}
 			</Label>
 			<Input
@@ -168,6 +171,7 @@ function FieldInput({
 				placeholder={field.placeholder}
 				value={String(value ?? "")}
 				onChange={(event) => onChange(event.target.value)}
+				className="border-white/10 bg-[#2e2e2e] text-white placeholder:text-white/30"
 			/>
 		</div>
 	);
@@ -188,10 +192,10 @@ function ListFieldInput({
 		const items = Array.isArray(value) ? value : [];
 		return (
 			<div className="grid gap-2">
-				<Label>
+				<Label className="text-white/70">
 					{field.label}{" "}
 					{field.optional ? (
-						<span className="text-muted-foreground">(optional)</span>
+						<span className="text-white/30">(optional)</span>
 					) : null}
 				</Label>
 				{items.map((item, index) => (
@@ -211,10 +215,11 @@ function ListFieldInput({
 									),
 								)
 							}
+							className="border-white/10 bg-[#2e2e2e] text-white placeholder:text-white/30"
 						/>
 						<button
 							aria-label={`Remove value ${index + 1}`}
-							className="text-muted-foreground transition-colors hover:text-destructive"
+							className="text-white/40 transition-colors hover:text-red-400"
 							onClick={() => onChange(items.filter((_, i) => i !== index))}
 							type="button"
 						>
@@ -223,7 +228,7 @@ function ListFieldInput({
 					</div>
 				))}
 				<Button
-					className="w-full"
+					className="w-full border-white/10 bg-[#2e2e2e] text-white/70 hover:bg-white/10 hover:text-white"
 					size="sm"
 					variant="outline"
 					onClick={() =>
@@ -267,19 +272,19 @@ function ListFieldInput({
 
 	return (
 		<div className="grid gap-2">
-			<Label>{field.label}</Label>
+			<Label className="text-white/70">{field.label}</Label>
 			{items.map((item, index) => (
 				<div
-					className="grid gap-2 rounded-md border bg-background/50 p-2.5"
+					className="grid gap-2 rounded-md border border-white/10 bg-[#2e2e2e] p-2.5"
 					key={`ingress-${String(index)}`}
 				>
 					<div className="flex items-center justify-between">
-						<p className="font-medium text-[11px] text-muted-foreground">
+						<p className="font-medium text-[11px] text-white/50">
 							Rule {index + 1}
 						</p>
 						<button
 							aria-label={`Remove rule ${index + 1}`}
-							className="text-muted-foreground transition-colors hover:text-destructive"
+							className="text-white/40 transition-colors hover:text-red-400"
 							onClick={() => removeItem(index)}
 							type="button"
 						>
@@ -302,7 +307,7 @@ function ListFieldInput({
 				</div>
 			))}
 			<Button
-				className="w-full"
+				className="w-full border-white/10 bg-[#2e2e2e] text-white/70 hover:bg-white/10 hover:text-white"
 				disabled={itemFields.length === 0}
 				size="sm"
 				variant="outline"
@@ -329,11 +334,11 @@ function ItemFieldInput({
 	if (field.type === "select") {
 		return (
 			<div className="grid gap-1">
-				<Label className="text-[11px]" htmlFor={id}>
+				<Label className="text-[11px] text-white/60" htmlFor={id}>
 					{field.label}
 				</Label>
 				<select
-					className="h-8 rounded-md border bg-background px-2 text-xs"
+					className="h-8 rounded-md border border-white/10 bg-[#2e2e2e] px-2 text-xs text-white"
 					id={id}
 					value={String(value ?? field.default ?? "")}
 					onChange={(event) => onChange(event.target.value)}
@@ -350,11 +355,11 @@ function ItemFieldInput({
 
 	return (
 		<div className="grid gap-1">
-			<Label className="text-[11px]" htmlFor={id}>
+			<Label className="text-[11px] text-white/60" htmlFor={id}>
 				{field.label}
 			</Label>
 			<Input
-				className="h-8 text-xs"
+				className="h-8 border-white/10 bg-[#2e2e2e] text-xs text-white placeholder:text-white/30"
 				id={id}
 				max={field.max}
 				min={field.min}

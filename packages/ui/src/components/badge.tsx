@@ -2,7 +2,7 @@ import { cn } from "@my-better-t-app/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
 
 const badgeVariants = cva(
-	"inline-flex w-fit shrink-0 select-none items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-sm border px-2 py-0.5 font-medium text-xs",
+	"inline-flex w-fit shrink-0 select-none items-center justify-center gap-1 overflow-hidden whitespace-nowrap rounded-md border px-2 py-0.5 font-medium text-xs",
 	{
 		variants: {
 			variant: {

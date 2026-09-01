@@ -782,7 +782,7 @@ function writeEcs(
 			? resource.attributes.container_port
 			: 80;
 
-	writer.block(`resource "aws_ecs_cluster" "${resource.name}-cluster"`, () => {
+	writer.block(`resource "aws_ecs_cluster" "${resource.name}"`, () => {
 		writer.line(
 			`name = ${hclString(`cloudman-${base}-${suffix}`.slice(0, 255))}`,
 		);
@@ -869,7 +869,7 @@ function writeEcs(
 			`name            = ${hclString(`cloudman-${base}-${suffix}-svc`.slice(0, 255))}`,
 		);
 		writer.line(
-			`cluster         = aws_ecs_cluster.${resource.name}-cluster.id`,
+			`cluster         = aws_ecs_cluster.${resource.name}.id`,
 		);
 		writer.line(
 			`task_definition = aws_ecs_task_definition.${resource.name}-task.arn`,

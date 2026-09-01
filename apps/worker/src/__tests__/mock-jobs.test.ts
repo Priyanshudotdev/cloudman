@@ -88,6 +88,7 @@ async function queueApply(deploymentId: string) {
 
 beforeAll(async () => {
 	const db = await import("@my-better-t-app/db");
+	await db.getClient();
 
 	deploymentModel = db.Deployment as never;
 	createProject = async () =>

@@ -12,6 +12,7 @@ function edge(
 	};
 }
 
+// Simple web server: 4 nodes, no ALB complexity, single AZ subnet fixed
 function webAppGraph(): InfrastructureGraph {
 	return {
 		version: 1,
@@ -21,109 +22,41 @@ function webAppGraph(): InfrastructureGraph {
 			{
 				id: "subnet-pub",
 				type: "aws_subnet",
-				config: { cidrBlock: "10.0.1.0/24" },
+				config: { cidrBlock: "10.0.1.0/24", availabilityZone: "us-east-1a" },
 			},
-			{
-				id: "subnet-priv",
-				type: "aws_subnet",
-				config: { cidrBlock: "10.0.2.0/24" },
-			},
-			{ id: "igw-1", type: "aws_internet_gateway", config: {} },
 			{
 				id: "sg-web",
 				type: "aws_security_group",
 				config: {
-					description: "public web tier",
+					description: "web tier",
 					ingressRules: [
-						{
-							fromPort: 80,
-							toPort: 80,
-							protocol: "tcp",
-							cidrBlock: "0.0.0.0/0",
-						},
+						{ fromPort: 80, toPort: 80, protocol: "tcp", cidrBlock: "0.0.0.0/0" },
 					],
 				},
 			},
-			{ id: "alb-1", type: "aws_alb", config: { scheme: "internet-facing" } },
-			{ id: "web-1", type: "aws_ec2", config: { instanceType: "t3.small" } },
-			{
-				id: "vol-1",
-				type: "aws_ebs",
-				config: { sizeGb: 20, encrypted: true },
-			},
+			{ id: "web-1", type: "aws_ec2", config: { instanceType: "t3.micro" } },
 		],
 		edges: [
 			edge("subnet-pub", "vpc-1"),
-			edge("subnet-priv", "vpc-1"),
-			edge("igw-1", "vpc-1"),
 			edge("sg-web", "vpc-1"),
-			edge("alb-1", "subnet-pub"),
-			edge("alb-1", "subnet-priv"),
-			edge("alb-1", "sg-web"),
 			edge("web-1", "subnet-pub"),
 			edge("web-1", "sg-web"),
-			edge("vol-1", "web-1"),
 		],
 	};
 }
 
+// Simple API: 4 nodes, no VPC complexity — keeps ECR for Lambda image build
 function serverlessApiGraph(): InfrastructureGraph {
 	return {
 		version: 1,
 		name: "serverless-api",
 		nodes: [
-			{ id: "vpc-1", type: "aws_vpc", config: { cidrBlock: "10.0.0.0/16" } },
-			{
-				id: "subnet-pub",
-				type: "aws_subnet",
-				config: { cidrBlock: "10.0.1.0/24" },
-			},
-			{
-				id: "subnet-priv",
-				type: "aws_subnet",
-				config: { cidrBlock: "10.0.2.0/24" },
-			},
-			{
-				id: "sg-lambda",
-				type: "aws_security_group",
-				config: { description: "lambda functions" },
-			},
+			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "lambda" } },
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{
-				id: "role-1",
-				type: "aws_iam_role",
-				config: { assumeService: "lambda" },
-			},
-			{
-				id: "fn-1",
-				type: "aws_lambda",
-				config: { runtime: "python3.12", memoryMb: 256 },
-			},
-			{ id: "fn-2", type: "aws_lambda", config: { runtime: "nodejs22.x" } },
-			{
-				id: "api-1",
-				type: "aws_apigateway",
-				config: { routePath: "/{proxy+}", httpMethod: "ANY" },
-			},
+			{ id: "fn-1", type: "aws_lambda", config: { runtime: "nodejs22.x", memoryMb: 128 } },
+			{ id: "api-1", type: "aws_apigateway", config: { routePath: "/{proxy+}", httpMethod: "ANY" } },
 		],
-		edges: [
-			edge("subnet-pub", "vpc-1"),
-			edge("subnet-priv", "vpc-1"),
-			edge("sg-lambda", "vpc-1"),
-			edge("repo-1", "vpc-1"),
-			edge("role-1", "vpc-1"),
-			edge("fn-1", "subnet-priv"),
-			edge("fn-1", "sg-lambda"),
-			edge("fn-1", "role-1"),
-			edge("fn-1", "repo-1"),
-			edge("fn-2", "subnet-priv"),
-			edge("fn-2", "sg-lambda"),
-			edge("fn-2", "role-1"),
-			edge("fn-2", "repo-1"),
-			edge("api-1", "vpc-1"),
-			edge("api-1", "fn-1"),
-			edge("api-1", "fn-2"),
-		],
+		edges: [edge("fn-1", "role-1"), edge("fn-1", "repo-1"), edge("api-1", "fn-1")],
 	};
 }
 
@@ -136,58 +69,33 @@ function reactAppGraph(): InfrastructureGraph {
 			{
 				id: "subnet-pub",
 				type: "aws_subnet",
-				config: { cidrBlock: "10.0.1.0/24" },
+				config: { cidrBlock: "10.0.1.0/24", availabilityZone: "us-east-1a" },
 			},
 			{
 				id: "subnet-priv",
 				type: "aws_subnet",
-				config: { cidrBlock: "10.0.2.0/24" },
+				config: { cidrBlock: "10.0.2.0/24", availabilityZone: "us-east-1b" },
 			},
-			{ id: "igw-1", type: "aws_internet_gateway", config: {} },
 			{
 				id: "sg-web",
 				type: "aws_security_group",
 				config: {
-					description: "public web tier for react app",
-					ingressRules: [
-						{
-							fromPort: 80,
-							toPort: 80,
-							protocol: "tcp",
-							cidrBlock: "0.0.0.0/0",
-						},
-						{
-							fromPort: 443,
-							toPort: 443,
-							protocol: "tcp",
-							cidrBlock: "0.0.0.0/0",
-						},
-					],
+					description: "ecs tier",
+					ingressRules: [{ fromPort: 80, toPort: 80, protocol: "tcp", cidrBlock: "0.0.0.0/0" }],
 				},
 			},
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{
-				id: "role-1",
-				type: "aws_iam_role",
-				config: { assumeService: "ecs-tasks" },
-			},
+			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "ecs-tasks" } },
 			{ id: "alb-1", type: "aws_alb", config: { scheme: "internet-facing" } },
 			{
 				id: "svc-1",
 				type: "aws_ecs",
-				config: {
-					cpu: "0.25 vCPU",
-					memory: "0.5 GB",
-					containerPort: 80,
-					desiredCount: 1,
-					imageTag: "latest",
-				},
+				config: { cpu: "0.25 vCPU", memory: "0.5 GB", containerPort: 80, desiredCount: 1, imageTag: "latest" },
 			},
 		],
 		edges: [
 			edge("subnet-pub", "vpc-1"),
 			edge("subnet-priv", "vpc-1"),
-			edge("igw-1", "vpc-1"),
 			edge("sg-web", "vpc-1"),
 			edge("repo-1", "vpc-1"),
 			edge("role-1", "vpc-1"),
@@ -204,37 +112,20 @@ function reactAppGraph(): InfrastructureGraph {
 	};
 }
 
+// Simple data: keep required sqs + dynamodb for tests, 6 nodes
 function dataPipelineGraph(): InfrastructureGraph {
 	return {
 		version: 1,
 		name: "data-pipeline",
 		nodes: [
-			{ id: "bucket-1", type: "aws_s3", config: { versioning: true } },
+			{ id: "bucket-1", type: "aws_s3", config: { versioning: false } },
 			{ id: "queue-1", type: "aws_sqs", config: {} },
-			{
-				id: "table-1",
-				type: "aws_dynamodb_table",
-				config: { hashKey: "id" },
-			},
-			{
-				id: "role-1",
-				type: "aws_iam_role",
-				config: { assumeService: "lambda" },
-			},
+			{ id: "table-1", type: "aws_dynamodb_table", config: { hashKey: "id" } },
+			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "lambda" } },
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{
-				id: "fn-1",
-				type: "aws_lambda",
-				config: { runtime: "python3.13", memoryMb: 512 },
-			},
+			{ id: "fn-1", type: "aws_lambda", config: { runtime: "python3.13", memoryMb: 256 } },
 		],
-		edges: [
-			edge("fn-1", "bucket-1"),
-			edge("fn-1", "queue-1"),
-			edge("fn-1", "table-1"),
-			edge("fn-1", "role-1"),
-			edge("fn-1", "repo-1"),
-		],
+		edges: [edge("fn-1", "bucket-1"), edge("fn-1", "queue-1"), edge("fn-1", "table-1"), edge("fn-1", "role-1"), edge("fn-1", "repo-1")],
 	};
 }
 
@@ -243,8 +134,8 @@ const graphs: Record<string, BlueprintGraph> = {
 		metadata: {
 			id: "web-app",
 			name: "Web App on EC2",
-			description: "Public ALB in front of an EC2 web tier with EBS storage",
-			tags: ["web", "ec2", "alb", "blog", "website"],
+			description: "Simple public EC2 in a VPC — cheapest quick start",
+			tags: ["web", "ec2", "simple", "website"],
 		},
 		build: webAppGraph,
 	},
@@ -252,7 +143,7 @@ const graphs: Record<string, BlueprintGraph> = {
 		metadata: {
 			id: "serverless-api",
 			name: "Serverless API",
-			description: "API Gateway in front of Lambda functions backed by ECR",
+			description: "API Gateway → single Lambda — no VPC",
 			tags: ["serverless", "lambda", "api", "function"],
 		},
 		build: serverlessApiGraph,
@@ -261,7 +152,7 @@ const graphs: Record<string, BlueprintGraph> = {
 		metadata: {
 			id: "data-pipeline",
 			name: "Data Pipeline",
-			description: "Lambda processor wired to S3, SQS, and DynamoDB",
+			description: "Lambda wired to S3, SQS and DynamoDB",
 			tags: ["data", "pipeline", "queue", "analytics", "etl"],
 		},
 		build: dataPipelineGraph,
@@ -270,7 +161,7 @@ const graphs: Record<string, BlueprintGraph> = {
 		metadata: {
 			id: "react-app",
 			name: "React App",
-			description: "Containerized React app on ECS Fargate behind an ALB",
+			description: "Containerized React on ECS Fargate behind ALB — subnets are AZ-fixed",
 			tags: ["react", "react app", "frontend", "spa", "container", "ecs"],
 		},
 		build: reactAppGraph,

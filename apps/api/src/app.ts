@@ -1,4 +1,4 @@
-import { auth } from "@my-better-t-app/auth";
+import { getAuth } from "@my-better-t-app/auth";
 import { env } from "@my-better-t-app/env/server";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
@@ -11,6 +11,8 @@ import { createCompileRoute } from "./routes/compile";
 import { createDeploymentsRoute } from "./routes/deployments";
 import { createGenerateRoute } from "./routes/generate";
 import { createProjectsRoute } from "./routes/projects";
+import { createRepoDeploymentsRoute } from "./routes/repo-deployments";
+import { createServersRoute } from "./routes/servers";
 
 export interface CreateAppOptions {
 	authMiddleware?: MiddlewareHandler<AppEnv>;
@@ -52,7 +54,9 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 		}),
 	);
 
-	app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+	app.on(["POST", "GET"], "/api/auth/*", async (c) =>
+		(await getAuth()).handler(c.req.raw),
+	);
 
 	app.route("/api/projects", createProjectsRoute(authMiddleware));
 	app.route("/api/analytics", createAnalyticsRoute(authMiddleware));
@@ -61,6 +65,11 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.route("/api/aws-connections", createAwsConnectionsRoute(authMiddleware));
 	app.route("/api/generate", createGenerateRoute(authMiddleware));
 	app.route("/api/blueprints", createBlueprintsRoute(authMiddleware));
+	app.route("/api/servers", createServersRoute(authMiddleware));
+	app.route(
+		"/api/repo-deployments",
+		createRepoDeploymentsRoute(authMiddleware),
+	);
 
 	return app;
 }

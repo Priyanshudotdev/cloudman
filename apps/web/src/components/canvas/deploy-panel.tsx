@@ -224,7 +224,7 @@ export function DeployPanel({
 			) : (
 				<>
 					{isDestroy && (
-						<div className="border-b bg-red-50 px-4 py-2 font-medium text-red-700 text-xs dark:bg-red-950 dark:text-red-400">
+						<div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 font-medium text-destructive text-xs">
 							Destruction mode — approved resources will be permanently removed.
 						</div>
 					)}
@@ -253,8 +253,8 @@ export function DeployPanel({
 										key={resource.address}
 										className={
 											resource.action === "delete"
-												? "text-red-600 dark:text-red-400"
-												: "text-green-600 dark:text-green-400"
+												? "text-destructive"
+												: "text-success"
 										}
 									>
 										{resource.action === "delete" ? "- " : "+ "}
@@ -263,7 +263,7 @@ export function DeployPanel({
 								))}
 							</ul>
 							<Button
-								className={`w-full ${isDestroy ? "bg-red-600 text-white hover:bg-red-500" : ""}`}
+								className={`w-full ${isDestroy ? "bg-destructive text-white hover:bg-destructive/90" : ""}`}
 								disabled={approving}
 								onClick={() => void approve()}
 							>
@@ -295,9 +295,9 @@ export function DeployPanel({
 								key={`${event.at}-${index}`}
 								className={
 									event.level === "error"
-										? "text-red-500"
+										? "text-destructive"
 										: event.level === "success"
-											? "text-green-600 dark:text-green-400"
+											? "text-success"
 											: "text-muted-foreground"
 								}
 							>
@@ -336,7 +336,7 @@ function SetupView({
 	return (
 		<div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
 			{isDestroy && (
-				<div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-red-700 text-xs dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+				<div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-xs">
 					A destruction plan will be generated first. Nothing is removed until
 					you review it and approve.
 				</div>

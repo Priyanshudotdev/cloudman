@@ -10,6 +10,7 @@ import {
 	Deployment,
 	GraphVersion,
 	Project,
+	Server,
 } from "@my-better-t-app/db";
 import {
 	getMaintenanceQueue,
@@ -47,6 +48,14 @@ export function createProjectsRoute(
 		name: z.string().min(1).max(120),
 		description: z.string().max(500).default(""),
 		blueprint: z.string().optional(),
+		kind: z.enum(["infra", "repo"]).default("infra"),
+		repoUrl: z.string().url().optional(),
+		repoBranch: z.string().min(1).max(200).optional(),
+		defaultStack: z.string().min(1).max(80).optional(),
+		serverId: z
+			.string()
+			.regex(/^[a-f\d]{24}$/i)
+			.optional(),
 	});
 
 	projectsRoute.post("/", async (c) => {
@@ -58,11 +67,23 @@ export function createProjectsRoute(
 			);
 		}
 
+		const { kind, repoUrl, repoBranch, defaultStack, serverId } = body.data;
+		if (kind === "repo") {
+			if (!repoUrl) {
+				return c.json({ error: "repoUrl is required for repo projects" }, 400);
+			}
+			if (serverId) {
+				const server = await Server.findOne({
+					_id: serverId,
+					userId: c.get("userId"),
+				}).lean();
+				if (!server) return c.json({ error: "Target server not found" }, 404);
+			}
+		}
+
 		let blueprintGraph: ReturnType<typeof buildBlueprint> | undefined;
 		if (body.data.blueprint) {
-			const known = listBlueprints().some(
-				(b) => b.id === body.data.blueprint,
-			);
+			const known = listBlueprints().some((b) => b.id === body.data.blueprint);
 			if (!known) {
 				return c.json(
 					{ error: `Unknown blueprint "${body.data.blueprint}"` },
@@ -76,6 +97,17 @@ export function createProjectsRoute(
 			name: body.data.name,
 			description: body.data.description,
 			ownerUserId: c.get("userId"),
+			...(kind === "repo"
+				? {
+						kind,
+						repo: {
+							url: repoUrl,
+							branch: repoBranch ?? "main",
+							...(defaultStack ? { defaultStack } : {}),
+							...(serverId ? { serverId } : {}),
+						},
+					}
+				: {}),
 		});
 
 		if (blueprintGraph) {
@@ -145,6 +177,58 @@ export function createProjectsRoute(
 			returnDocument: "after",
 			runValidators: true,
 		}).lean();
+		if (!updated) return c.json({ error: "Not found" }, 404);
+		return c.json({ project: updated });
+	});
+
+	const updateRepoSchema = z.object({
+		repoUrl: z.string().url().optional(),
+		repoBranch: z.string().min(1).max(200).optional(),
+		defaultStack: z.string().min(1).max(80).optional(),
+		serverId: z
+			.string()
+			.regex(/^[a-f\d]{24}$/i)
+			.optional(),
+	});
+
+	projectsRoute.put("/:id/repo-config", async (c) => {
+		const id = c.req.param("id");
+		const project = await loadOwnedProject(c, id);
+		if (!project) return c.json({ error: "Not found" }, 404);
+		if (project.kind !== "repo") {
+			return c.json({ error: "Project is not a repo deployment project" }, 409);
+		}
+
+		const parsed = updateRepoSchema.safeParse(await c.req.json());
+		if (!parsed.success) {
+			return c.json(
+				{ error: "Invalid request", issues: parsed.error.issues },
+				400,
+			);
+		}
+
+		if (parsed.data.serverId) {
+			const server = await Server.findOne({
+				_id: parsed.data.serverId,
+				userId: c.get("userId"),
+			}).lean();
+			if (!server) return c.json({ error: "Target server not found" }, 404);
+		}
+
+		const repo = (project.repo ?? {}) as Record<string, unknown>;
+		if (parsed.data.repoUrl !== undefined) repo.url = parsed.data.repoUrl;
+		if (parsed.data.repoBranch !== undefined)
+			repo.branch = parsed.data.repoBranch;
+		if (parsed.data.defaultStack !== undefined)
+			repo.defaultStack = parsed.data.defaultStack;
+		if (parsed.data.serverId !== undefined)
+			repo.serverId = parsed.data.serverId;
+
+		const updated = await Project.findByIdAndUpdate(
+			id,
+			{ $set: { repo, updatedAt: new Date() } },
+			{ returnDocument: "after", runValidators: true },
+		).lean();
 		if (!updated) return c.json({ error: "Not found" }, 404);
 		return c.json({ project: updated });
 	});

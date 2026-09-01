@@ -2,6 +2,7 @@
 
 import {
 	Background,
+	BackgroundVariant,
 	type Connection,
 	Controls,
 	type Edge,
@@ -20,7 +21,6 @@ import "@xyflow/react/dist/style.css";
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
-import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import type {
 	CompileResultDto,
@@ -74,7 +74,8 @@ function flowFromGraph(graph: GraphJson): {
 		id: edge.id ?? `${edge.source}->${edge.target}`,
 		source: edge.source,
 		target: edge.target,
-		markerEnd: { type: MarkerType.ArrowClosed },
+		markerEnd: { type: MarkerType.ArrowClosed, color: "#d0d0d0" },
+		style: { stroke: "#d0d0d0", strokeWidth: 1.8 },
 	}));
 	return { nodes, edges };
 }
@@ -122,11 +123,6 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [versionsOpen, setVersionsOpen] = useState(false);
 	const [generatePrompt, setGeneratePrompt] = useState("");
 	const [generating, setGenerating] = useState(false);
-	const [templatesOpen, setTemplatesOpen] = useState(false);
-	const [templates, setTemplates] = useState<
-		Array<{ id: string; name: string; description: string }>
-	>([]);
-	const [templateLoading, setTemplateLoading] = useState(false);
 
 	useEffect(() => {
 		async function load() {
@@ -161,24 +157,6 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		void load();
 	}, [projectId, setNodes, setEdges]);
 
-	useEffect(() => {
-		async function loadTemplates() {
-			try {
-				const result = await api<{
-					blueprints: Array<{
-						id: string;
-						name: string;
-						description: string;
-					}>;
-				}>("/api/blueprints");
-				setTemplates(result.blueprints);
-			} catch {
-				// Non-fatal: templates are an enhancement over the generate box.
-			}
-		}
-		void loadTemplates();
-	}, []);
-
 	const selectedNode = useMemo(
 		() => nodes.find((node) => node.id === selectedId) ?? null,
 		[nodes, selectedId],
@@ -201,7 +179,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						id: `${connection.source}->${connection.target}`,
 						source: connection.source,
 						target: connection.target,
-						markerEnd: { type: MarkerType.ArrowClosed },
+						markerEnd: { type: MarkerType.ArrowClosed, color: "#d0d0d0" },
+						style: { stroke: "#d0d0d0", strokeWidth: 1.8 },
 					},
 				];
 			});
@@ -353,34 +332,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		}
 	}
 
-	async function handleLoadTemplate(blueprintId: string) {
-		setTemplateLoading(true);
-		setTemplatesOpen(false);
-		try {
-			const result = await api<{ blueprint: string; graph: GraphJson }>(
-				`/api/blueprints/${blueprintId}`,
-			);
-			const flow = flowFromGraph(result.graph);
-			setNodes(flow.nodes);
-			setEdges(flow.edges);
-			setSelectedId(null);
-			setIssues([]);
-			setPreview(null);
-			toast.success(
-				`Loaded "${result.blueprint}" template (${flow.nodes.length} resources, unsaved)`,
-			);
-		} catch (error) {
-			toast.error(
-				error instanceof Error ? error.message : "Failed to load template",
-			);
-		} finally {
-			setTemplateLoading(false);
-		}
-	}
-
 	async function handleDeploy(action: "provision" | "destroy") {
-		// Destruction pins to the last completed provision's graph server-side,
-		// so saving the canvas first is only needed for provision runs.
 		if (action === "provision") {
 			const saved = await handleSave();
 			if (!saved) return;
@@ -443,71 +395,50 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 
 	if (loading) {
 		return (
-			<div className="flex h-full items-center justify-center text-muted-foreground text-sm">
-				Loading canvas...
+			<div className="flex h-full items-center justify-center bg-[#1e1e1e] text-sm text-white/60">
+				Loading canvas…
 			</div>
 		);
 	}
 
 	return (
-		<div className="relative flex h-full min-h-0 flex-col">
-			<div className="flex items-center gap-3 border-b bg-card px-4 py-2">
+		<div className="relative flex h-full min-h-0 flex-col bg-[#1e1e1e]">
+			{/* n8n top bar */}
+			<div className="flex h-11 shrink-0 items-center gap-2 border-b border-white/10 bg-[#2e2e2e] px-3 text-white">
 				<Link
 					href="/dashboard"
-					className="text-muted-foreground text-sm hover:text-foreground"
+					className="shrink-0 text-xs text-white/60 hover:text-white"
 				>
 					← Projects
 				</Link>
-				<span className="font-semibold text-sm">{projectName}</span>
-				{version > 0 && <Badge variant="secondary">v{version}</Badge>}
-				<span className="text-muted-foreground text-xs">
-					{nodes.length} resource{nodes.length === 1 ? "" : "s"} ·{" "}
-					{edges.length} connection{edges.length === 1 ? "" : "s"}
+				<div className="mx-1 h-4 w-px shrink-0 bg-white/10" />
+				<span className="truncate text-sm font-medium text-white">{projectName}</span>
+				{version > 0 && (
+					<Badge variant="secondary" className="h-5 bg-white/10 px-1.5 text-[10px] font-normal text-white/70">
+						v{version}
+					</Badge>
+				)}
+				<span className="hidden text-xs text-white/40 sm:inline">
+					· {nodes.length} nodes · {edges.length} connections
 				</span>
-				<div className="ml-auto flex items-center gap-2">
-					<div className="relative">
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={busy || templateLoading}
-							onClick={() => setTemplatesOpen((current) => !current)}
+
+				{/* center: Editor / Executions */}
+				<div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
+					<div className="flex rounded-md bg-[#1e1e1e] p-0.5">
+						<span className="rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]">Editor</span>
+						<button
+							type="button"
+							className="px-3 py-1 text-xs text-white/50 hover:text-white/80"
+							onClick={() => toast.info("Executions coming soon")}
 						>
-							Templates
-							<ChevronDown className="ml-1 h-3.5 w-3.5" />
-						</Button>
-						{templatesOpen && !templateLoading && (
-							<div className="absolute top-full right-0 z-20 mt-1 w-72 overflow-hidden rounded-md border bg-popover shadow-md">
-								<div className="border-b px-3 py-2 font-medium text-[11px] text-muted-foreground">
-									One-click stack templates
-								</div>
-								<ul className="max-h-80 overflow-y-auto">
-									{templates.length === 0 && (
-										<li className="px-3 py-2 text-muted-foreground text-xs">
-											No templates available.
-										</li>
-									)}
-									{templates.map((template) => (
-										<li key={template.id}>
-											<button
-												type="button"
-												className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-accent"
-												onClick={() => void handleLoadTemplate(template.id)}
-											>
-												<span className="font-medium text-sm">
-													{template.name}
-												</span>
-												<span className="text-[11px] text-muted-foreground">
-													{template.description}
-												</span>
-											</button>
-										</li>
-									))}
-								</ul>
-							</div>
-						)}
+							Executions
+						</button>
 					</div>
+				</div>
+
+				<div className="ml-auto flex items-center gap-1.5">
 					<form
-						className="flex items-center gap-1.5"
+						className="hidden items-center gap-1.5 sm:flex"
 						onSubmit={(event) => {
 							event.preventDefault();
 							void handleGenerate();
@@ -518,22 +449,25 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							onChange={(event) => setGeneratePrompt(event.target.value)}
 							placeholder="Describe a stack…"
 							disabled={generating || busy}
-							className="h-8 w-44 rounded-md border bg-background px-2 text-xs placeholder:text-muted-foreground focus:outline-none disabled:opacity-50"
+							className="h-7 w-36 rounded-md border border-white/10 bg-[#1e1e1e] px-2.5 text-xs text-white placeholder:text-white/40 focus:border-white/20 focus:outline-none disabled:opacity-50 lg:w-48"
 						/>
 						<Button
 							type="submit"
 							variant="outline"
 							size="sm"
 							disabled={generating || busy}
+							className="h-7 border-white/10 bg-transparent px-2.5 text-xs text-white hover:bg-white/10 hover:text-white"
 						>
-							{generating ? "Generating…" : "Generate"}
+							{generating ? "…" : "Generate"}
 						</Button>
 					</form>
+					<div className="hidden h-4 w-px bg-white/10 sm:block" />
 					<Button
 						variant="ghost"
 						size="sm"
 						disabled={busy}
 						onClick={() => setVersionsOpen(true)}
+						className="hidden h-7 text-xs text-white/70 hover:bg-white/10 hover:text-white sm:inline-flex"
 					>
 						Versions
 					</Button>
@@ -542,6 +476,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleValidate()}
+						className="h-7 border-white/10 bg-transparent text-xs text-white hover:bg-white/10 hover:text-white"
 					>
 						Validate
 					</Button>
@@ -550,6 +485,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleSave()}
+						className="h-7 border-white/10 bg-transparent text-xs text-white hover:bg-white/10 hover:text-white"
 					>
 						Save
 					</Button>
@@ -558,6 +494,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleDeploy("destroy")}
+						className="h-7 bg-[#4a1a1a] text-xs text-red-200 hover:bg-[#5a2020]"
 					>
 						Destroy
 					</Button>
@@ -565,6 +502,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleDeploy("provision")}
+						className="h-7 bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
 					>
 						Deploy
 					</Button>
@@ -572,11 +510,11 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 			</div>
 
 			{issues.length > 0 && (
-				<div className="border-red-200 border-b bg-red-50 px-4 py-2 dark:border-red-900 dark:bg-red-950">
-					<p className="mb-1 font-semibold text-red-700 text-xs dark:text-red-400">
+				<div className="border-b border-red-900/50 bg-[#3a1a1a] px-4 py-2">
+					<p className="mb-1 text-xs font-semibold text-red-300">
 						{issues.length} validation issue(s)
 					</p>
-					<ul className="space-y-0.5 font-mono text-[11px] text-red-600 dark:text-red-300">
+					<ul className="space-y-0.5 font-mono text-[11px] text-red-300/80">
 						{issues.map((issue, index) => (
 							<li key={`${issue.code}-${index}`}>{issue.message}</li>
 						))}
@@ -585,36 +523,42 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 			)}
 
 			<div className="flex min-h-0 flex-1">
-				<div className="w-48 shrink-0 space-y-2 overflow-y-auto border-r bg-card p-3">
-					<p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
+				{/* n8n left palette — dark */}
+				<div className="hidden w-52 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-[#2e2e2e] p-2 sm:flex">
+					<p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
 						Resources
 					</p>
-					{Object.values(RESOURCE_SPECS).map((spec) => (
-						<button
-							type="button"
-							key={spec.type}
-							draggable
-							onDragStart={(event) => {
-								event.dataTransfer.setData(
-									"application/cloudman-resource",
-									spec.type,
-								);
-								event.dataTransfer.effectAllowed = "move";
-							}}
-							className="flex cursor-grab items-center gap-2 rounded-md border p-2 text-sm hover:bg-accent active:cursor-grabbing"
-						>
-							<span
-								className="flex h-6 w-6 items-center justify-center rounded text-white"
-								style={{ backgroundColor: spec.accent }}
+					<div className="flex flex-col gap-1">
+						{Object.values(RESOURCE_SPECS).map((spec) => (
+							<button
+								type="button"
+								key={spec.type}
+								draggable
+								onDragStart={(event) => {
+									event.dataTransfer.setData(
+										"application/cloudman-resource",
+										spec.type,
+									);
+									event.dataTransfer.effectAllowed = "move";
+								}}
+								className="flex items-center gap-2 rounded-md border border-white/5 bg-[#3a3a3a] px-2 py-1.5 text-left text-xs text-white/80 hover:border-white/10 hover:bg-[#404040] active:cursor-grabbing"
 							>
-								<spec.icon size={13} />
-							</span>
-							{spec.label}
-						</button>
-					))}
+								<span
+									className="flex size-6 shrink-0 items-center justify-center rounded text-white"
+									style={{ backgroundColor: spec.accent }}
+								>
+									<spec.icon size={12} />
+								</span>
+								<span className="truncate">{spec.label}</span>
+							</button>
+						))}
+					</div>
+					<p className="px-1 pt-4 text-[10px] leading-snug text-white/30">
+						Drag onto canvas to add. Connect with handles.
+					</p>
 				</div>
 
-				<div className="relative min-w-0 flex-1">
+				<div className="relative min-w-0 flex-1 bg-[#1e1e1e]">
 					<ReactFlow
 						nodes={nodes}
 						edges={edges}
@@ -630,11 +574,37 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						onNodeClick={(_, node) => setSelectedId(node.id)}
 						onPaneClick={() => setSelectedId(null)}
 						fitView
+						className="bg-[#1e1e1e]"
+						defaultEdgeOptions={{
+							markerEnd: { type: MarkerType.ArrowClosed, color: "#d0d0d0" },
+							style: { stroke: "#d0d0d0", strokeWidth: 1.8 },
+						}}
 					>
-						<Background />
-						<Controls />
-						<MiniMap pannable zoomable />
+						<Background
+							variant={BackgroundVariant.Dots}
+							gap={18}
+							size={1.2}
+							color="#3a3a3a"
+						/>
+						<Controls className="!border-white/10 [&_button]:!border-white/10 [&_button]:!bg-[#2e2e2e] [&_button]:!text-white/70 [&_button:hover]:!bg-[#3a3a3a]" />
+						<MiniMap
+							pannable
+							zoomable
+							className="!border-white/10 !bg-[#2e2e2e]"
+							maskColor="rgba(30,30,30,0.7)"
+							nodeColor="#3a3a3a"
+						/>
 					</ReactFlow>
+
+					{/* n8n add node (+) floating button — top right of canvas */}
+					<button
+						type="button"
+						className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-md border border-white/10 bg-[#2e2e2e] text-white/70 shadow hover:bg-[#3a3a3a] hover:text-white"
+						title="Add node (drag from left)"
+						onClick={() => toast.info("Drag a resource from the left palette")}
+					>
+						<span className="text-sm leading-none">+</span>
+					</button>
 
 					{deployOpen && (
 						<DeployPanel
