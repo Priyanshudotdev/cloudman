@@ -773,7 +773,7 @@ describe("catalog v2 IR + compile", () => {
 		connect(graph, "svc-1", "repo-1");
 		const main = compiled(graph);
 
-		expect(main).toContain('resource "aws_ecs_cluster" "svc-1-cluster"');
+		expect(main).toContain('resource "aws_ecs_cluster" "svc-1"');
 		expect(main).toContain('resource "aws_ecs_task_definition" "svc-1-task"');
 		expect(main).toContain('"cloudman-svc-1-ab12cd-svc"');
 		expect(main).toContain('network_mode             = "awsvpc"');
