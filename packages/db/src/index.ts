@@ -1,9 +1,19 @@
 import { env } from "@my-better-t-app/env/db";
+import type { Db } from "mongodb";
 import mongoose from "mongoose";
 
-await mongoose.connect(env.DATABASE_URL);
+const globalForDb = globalThis as unknown as {
+	cloudmanDbPromise?: Promise<Db>;
+};
 
-const client = mongoose.connection.getClient().db();
+export function getClient(): Promise<Db> {
+	if (!globalForDb.cloudmanDbPromise) {
+		globalForDb.cloudmanDbPromise = mongoose
+			.connect(env.DATABASE_URL)
+			.then(() => mongoose.connection.getClient().db());
+	}
+	return globalForDb.cloudmanDbPromise;
+}
 
 export {
 	decryptSecret,
@@ -18,4 +28,3 @@ export {
 } from "./models/deployment.model";
 export { GraphVersion } from "./models/graph-version.model";
 export { Project } from "./models/project.model";
-export { client };

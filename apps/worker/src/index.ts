@@ -1,4 +1,4 @@
-import { Deployment } from "@my-better-t-app/db";
+import { Deployment, getClient } from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/worker";
 import {
 	INFRA_APPLY_QUEUE,
@@ -43,6 +43,8 @@ async function reconcileOrphanedDeployments(): Promise<void> {
 		);
 	}
 }
+
+await getClient();
 
 await reconcileOrphanedDeployments();
 

@@ -1,4 +1,4 @@
-import { auth } from "@my-better-t-app/auth";
+import { getAuth } from "@my-better-t-app/auth";
 import { env } from "@my-better-t-app/env/server";
 import { Hono, type MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
@@ -52,7 +52,9 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 		}),
 	);
 
-	app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+	app.on(["POST", "GET"], "/api/auth/*", async (c) =>
+		(await getAuth()).handler(c.req.raw),
+	);
 
 	app.route("/api/projects", createProjectsRoute(authMiddleware));
 	app.route("/api/analytics", createAnalyticsRoute(authMiddleware));

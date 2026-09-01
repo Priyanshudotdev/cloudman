@@ -134,6 +134,7 @@
       "dependencies": {
         "@my-better-t-app/env": "workspace:*",
         "dotenv": "catalog:",
+        "mongodb": "^7.5.0",
         "mongoose": "^9.8.1",
         "zod": "catalog:",
       },
@@ -168,6 +169,16 @@
       },
       "devDependencies": {
         "@my-better-t-app/config": "workspace:*",
+        "@types/node": "^22.20.1",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/repo": {
+      "name": "@my-better-t-app/repo",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@my-better-t-app/config": "workspace:*",
+        "@types/bun": "^1.3.0",
         "@types/node": "^22.20.1",
         "typescript": "catalog:",
       },
@@ -536,6 +547,8 @@
     "@my-better-t-app/env": ["@my-better-t-app/env@workspace:packages/env"],
 
     "@my-better-t-app/queue": ["@my-better-t-app/queue@workspace:packages/queue"],
+
+    "@my-better-t-app/repo": ["@my-better-t-app/repo@workspace:packages/repo"],
 
     "@my-better-t-app/ui": ["@my-better-t-app/ui@workspace:packages/ui"],
 

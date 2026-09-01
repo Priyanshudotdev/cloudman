@@ -1,12 +1,13 @@
-import { client } from "@my-better-t-app/db";
+import { getClient } from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/server";
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { nextCookies } from "better-auth/next-js";
+import type { Db } from "mongodb";
 
-export function createAuth() {
+export function createAuth(db: Db) {
 	return betterAuth({
-		database: mongodbAdapter(client),
+		database: mongodbAdapter(db),
 		trustedOrigins: [env.CORS_ORIGIN],
 		emailAndPassword: {
 			enabled: true,
@@ -29,4 +30,18 @@ export function createAuth() {
 	});
 }
 
-export const auth = createAuth();
+const globalForAuth = globalThis as unknown as {
+	cloudmanAuthPromise?: ReturnType<typeof initializeAuth>;
+};
+
+async function initializeAuth() {
+	const db = await getClient();
+	return createAuth(db);
+}
+
+export function getAuth() {
+	if (!globalForAuth.cloudmanAuthPromise) {
+		globalForAuth.cloudmanAuthPromise = initializeAuth();
+	}
+	return globalForAuth.cloudmanAuthPromise;
+}

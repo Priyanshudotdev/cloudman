@@ -13,6 +13,7 @@
 	"dependencies": {
 		"@my-better-t-app/env": "workspace:*",
 		"dotenv": "catalog:",
+		"mongodb": "^7.5.0",
 		"mongoose": "^9.8.1",
 		"zod": "catalog:"
 	},

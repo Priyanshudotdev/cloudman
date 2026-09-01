@@ -186,7 +186,8 @@ beforeAll(async () => {
 
 	deploymentModel = db.Deployment as never;
 
-	await db.client.dropDatabase();
+	const dbClient = await db.getClient();
+	await dbClient.dropDatabase();
 	await queue.getPlanQueue().obliterate({ force: true });
 	await queue.getApplyQueue().obliterate({ force: true });
 
