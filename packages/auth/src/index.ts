@@ -44,4 +44,4 @@ export function getAuth() {
 		globalForAuth.cloudmanAuthPromise = initializeAuth();
 	}
 	return globalForAuth.cloudmanAuthPromise;
-}
+}

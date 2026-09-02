@@ -29,8 +29,8 @@ export function statusVariant(status: string): BadgeVariant {
 
 const levelIcon: Record<string, string> = {
 	info: "text-muted-foreground",
-	progress: "text-sky-600 dark:text-sky-400",
-	success: "text-emerald-600 dark:text-emerald-400",
+	progress: "text-info",
+	success: "text-success",
 	error: "text-destructive",
 };
 
@@ -228,7 +228,7 @@ export function DeploymentHistory({
 													<span
 														className={cn(
 															deployment.planSummary.create > 0 &&
-																"text-emerald-600 dark:text-emerald-400",
+																"text-success",
 														)}
 													>
 														+{deployment.planSummary.create}
@@ -236,7 +236,7 @@ export function DeploymentHistory({
 													<span
 														className={cn(
 															deployment.planSummary.update > 0 &&
-																"text-sky-600 dark:text-sky-400",
+																"text-info",
 														)}
 													>
 														~{deployment.planSummary.update}

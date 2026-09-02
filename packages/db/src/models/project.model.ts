@@ -10,6 +10,28 @@ const projectSchema = new Schema(
 		description: { type: String, default: "" },
 		/** better-auth emits fractional ids ("user_..."); store as plain strings. */
 		ownerUserId: { type: String, required: true },
+		/** infra = canvas/OpenTofu project; repo = git-repo deploy project. */
+		kind: {
+			type: String,
+			enum: ["infra", "repo"],
+			required: true,
+			default: "infra",
+		},
+		/** Git repo configuration for kind=repo projects. */
+		repo: {
+			type: new Schema(
+				{
+					url: { type: String, required: true },
+					branch: { type: String, default: "main" },
+					/** Optional stack override fetched from packages/repo detection. */
+					defaultStack: { type: String },
+					/** Optional default target server for repo deploys. */
+					serverId: { type: ObjectId, ref: "Server" },
+				},
+				{ _id: false },
+			),
+			default: () => ({}),
+		},
 		latestGraphVersion: { type: Number, required: true, default: 0 },
 		createdAt: { type: Date, required: true, default: Date.now },
 		updatedAt: { type: Date, required: true, default: Date.now },

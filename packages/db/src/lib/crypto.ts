@@ -60,3 +60,21 @@ export function resolveExternalId(value: string, secretHex?: string): string {
 	}
 	return decryptSecret(value, secretHex) as string;
 }
+
+/**
+ * Resolve a stored server credential (SSH key/password) to plaintext. Mirrors
+ * resolveExternalId: legacy plaintext rows are returned as-is; ciphertext
+ * requires CLOUDMAN_SECRET to be set.
+ */
+export function resolveServerCredential(
+	value: string,
+	secretHex?: string,
+): string {
+	if (!value.startsWith(PREFIX)) return value;
+	if (!secretHex) {
+		throw new Error(
+			"CLOUDMAN_SECRET must be configured to read encrypted server credentials.",
+		);
+	}
+	return decryptSecret(value, secretHex) as string;
+}

@@ -11,6 +11,8 @@ import { createCompileRoute } from "./routes/compile";
 import { createDeploymentsRoute } from "./routes/deployments";
 import { createGenerateRoute } from "./routes/generate";
 import { createProjectsRoute } from "./routes/projects";
+import { createRepoDeploymentsRoute } from "./routes/repo-deployments";
+import { createServersRoute } from "./routes/servers";
 
 export interface CreateAppOptions {
 	authMiddleware?: MiddlewareHandler<AppEnv>;
@@ -63,6 +65,11 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.route("/api/aws-connections", createAwsConnectionsRoute(authMiddleware));
 	app.route("/api/generate", createGenerateRoute(authMiddleware));
 	app.route("/api/blueprints", createBlueprintsRoute(authMiddleware));
+	app.route("/api/servers", createServersRoute(authMiddleware));
+	app.route(
+		"/api/repo-deployments",
+		createRepoDeploymentsRoute(authMiddleware),
+	);
 
 	return app;
 }

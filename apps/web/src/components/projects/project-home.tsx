@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, buttonVariants } from "@my-better-t-app/ui/components/button";
+import { Button } from "@my-better-t-app/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -8,12 +8,35 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@my-better-t-app/ui/components/card";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@my-better-t-app/ui/components/dropdown-menu";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@my-better-t-app/ui/components/empty";
 import { Input } from "@my-better-t-app/ui/components/input";
+import { Skeleton } from "@my-better-t-app/ui/components/skeleton";
+import {
+	Boxes,
+	MoreHorizontal,
+	Plus,
+	Search,
+	Sparkles,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Boxes, Sparkles } from "lucide-react";
+
+import { AppShell } from "@/components/app-shell";
 import { DeploymentHistory } from "@/components/deployments/deployment-history";
 import type { AnalyticsStatsDto, BlueprintDto, ProjectDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
@@ -23,20 +46,32 @@ const STAT_CARDS: Array<{
 	key: keyof AnalyticsStatsDto["stats"];
 	format?: (value: number | null) => string;
 }> = [
-	{ label: "Projects", key: "projects" },
-	{ label: "Deployments", key: "deployments" },
+	{ label: "Workflows", key: "projects" },
+	{ label: "Executions", key: "deployments" },
 	{
 		label: "Success rate",
 		key: "successRate",
-		format: (value) => (value === null ? "n/a" : `${value}%`),
+		format: (value) => (value === null ? "—" : `${value}%`),
 	},
-	{ label: "Resources managed", key: "resourcesManaged" },
+	{ label: "Resources", key: "resourcesManaged" },
 	{
-		label: "Monthly spend",
+		label: "Spend",
 		key: "monthlySpendEstimate",
-		format: (value) => (value === null ? "n/a" : `~$${value.toFixed(2)}/mo`),
+		format: (value) => (value === null ? "—" : `~$${value.toFixed(0)}`),
 	},
 ];
+
+function formatUpdatedAt(value: string) {
+	const date = new Date(value);
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffMinutes = Math.floor(diffMs / 60_000);
+	if (diffMinutes < 1) return "just now";
+	if (diffMinutes < 60) return `${diffMinutes}m ago`;
+	const diffHours = Math.floor(diffMinutes / 60);
+	if (diffHours < 24) return `${diffHours}h ago`;
+	return date.toLocaleDateString();
+}
 
 export function ProjectHome() {
 	const [projects, setProjects] = useState<ProjectDto[]>([]);
@@ -51,9 +86,8 @@ export function ProjectHome() {
 	const [savingEdit, setSavingEdit] = useState(false);
 	const [templates, setTemplates] = useState<BlueprintDto[]>([]);
 	const [templateName, setTemplateName] = useState("");
-	const [creatingTemplate, setCreatingTemplate] = useState<string | null>(
-		null,
-	);
+	const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null);
+	const [query, setQuery] = useState("");
 
 	const loadTemplates = useCallback(async () => {
 		try {
@@ -83,7 +117,14 @@ export function ProjectHome() {
 		try {
 			const result = await api<AnalyticsStatsDto>("/api/analytics");
 			setStats(result.stats);
-		} catch {
+		} catch (error) {
+			toast.error(
+				error instanceof ApiError
+					? `Analytics: ${error.message}`
+					: error instanceof Error
+						? error.message
+						: "Failed to load analytics",
+			);
 			setStats(null);
 		}
 	}, []);
@@ -207,232 +248,329 @@ export function ProjectHome() {
 		}
 	}
 
+	const filtered = projects.filter((p) =>
+		query.trim()
+			? p.name.toLowerCase().includes(query.toLowerCase()) ||
+				p.description.toLowerCase().includes(query.toLowerCase())
+			: true,
+	);
+
 	return (
-		<div className="container mx-auto max-w-4xl px-4 py-8">
-			<h1 className="mb-1 font-semibold text-xl">Infrastructure projects</h1>
-			<p className="mb-6 text-muted-foreground text-sm">
-				Design AWS infrastructure on a canvas, review the generated plan,
-				deploy.
-			</p>
-
-			{stats && (
-				<div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-					{STAT_CARDS.map((card) => (
-						<div key={card.key} className="rounded-lg border bg-card p-4">
-							<p className="font-medium text-muted-foreground text-xs uppercase tracking-wide">
-								{card.label}
-							</p>
-							<p className="mt-1 font-semibold text-xl">
-								{card.format ? card.format(stats[card.key]) : stats[card.key]}
-							</p>
+		<AppShell>
+			{/* main */}
+				{/* n8n-style top bar */}
+				<div className="flex h-12 shrink-0 items-center gap-3 border-b bg-card px-4 sm:px-6">
+					<h1 className="text-sm font-semibold text-foreground">Overview</h1>
+					<div className="ml-auto flex items-center gap-2">
+						<div className="hidden items-center gap-2 sm:flex">
+							<div className="relative">
+								<Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+								<Input
+									placeholder="Search projects"
+									value={query}
+									onChange={(e) => setQuery(e.target.value)}
+									className="h-8 w-56 bg-muted pl-8 text-xs"
+								/>
+							</div>
 						</div>
-					))}
-				</div>
-			)}
-
-			<div className="mb-6 flex gap-2">
-				<Input
-					placeholder="New project name"
-					value={newName}
-					onChange={(event) => setNewName(event.target.value)}
-					onKeyDown={(event) => event.key === "Enter" && void createProject()}
-				/>
-				<Button
-					disabled={creating || !newName.trim()}
-					onClick={() => void createProject()}
-				>
-					Create
-				</Button>
-			</div>
-
-			{templates.length > 0 && (
-				<div className="mb-8">
-					<div className="mb-3 flex items-center gap-2">
-						<Sparkles className="h-4 w-4 text-muted-foreground" />
-						<h2 className="font-medium text-sm">
-							Start from a template
-						</h2>
-						<span className="text-muted-foreground text-xs">
-							Creates a project pre-loaded with the stack on the canvas
-						</span>
+						<div className="flex items-center gap-2">
+							<Input
+								placeholder="New project name"
+								value={newName}
+								onChange={(e) => setNewName(e.target.value)}
+								onKeyDown={(e) => e.key === "Enter" && void createProject()}
+								className="hidden h-8 w-40 text-xs sm:flex"
+							/>
+							<Button
+								size="sm"
+								disabled={creating || !newName.trim()}
+								onClick={() => void createProject()}
+								className="h-8 bg-brand text-white hover:bg-brand/90 disabled:opacity-50"
+							>
+								<Plus className="size-3.5" />
+								Create workflow
+							</Button>
+						</div>
 					</div>
-					<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-						{templates.map((template) => (
-							<Card key={template.id} className="flex flex-col">
-								<CardHeader className="pb-2">
-									<div className="flex items-center gap-2">
-										<Boxes className="h-4 w-4 text-muted-foreground" />
-										<CardTitle className="text-sm">
-											{template.name}
-										</CardTitle>
-									</div>
-									{template.description && (
-										<CardDescription>{template.description}</CardDescription>
-									)}
-								</CardHeader>
-								<CardContent className="mt-auto flex flex-col gap-2 pt-0 pb-3">
-									<div className="flex flex-wrap gap-1">
-										{template.tags.slice(0, 3).map((tag) => (
-											<span
-												key={tag}
-												className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground text-[10px]"
-											>
-												{tag}
-											</span>
-										))}
-									</div>
-									<form
-										className="flex gap-1.5"
-										onSubmit={(event) => {
-											event.preventDefault();
-											void createProjectFromTemplate(template);
-										}}
-									>
-										<Input
-											aria-label={`Name for ${template.name}`}
-											placeholder="Project name"
-											value={templateName}
-											onChange={(event) =>
-												setTemplateName(event.target.value)
-											}
-											className="h-8 text-xs"
-										/>
-										<Button
-											type="submit"
-											size="sm"
-											disabled={
-												creatingTemplate === template.id ||
-												!templateName.trim()
-											}
+				</div>
+
+				{/* mobile search + create */}
+				<div className="flex gap-2 border-b bg-card px-4 py-3 sm:hidden">
+					<div className="relative flex-1">
+						<Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+						<Input
+							placeholder="Search projects"
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							className="h-8 bg-muted pl-8 text-xs"
+						/>
+					</div>
+					<Input
+						placeholder="Name"
+						value={newName}
+						onChange={(e) => setNewName(e.target.value)}
+						className="h-8 w-28 text-xs"
+					/>
+				</div>
+
+				<div className="flex-1 overflow-y-auto">
+					<div className="mx-auto max-w-6xl p-4 sm:p-6">
+						{/* stats — n8n compact pills */}
+						<div className="mb-5 flex flex-wrap gap-2">
+							{stats
+								? STAT_CARDS.map((card) => (
+										<div
+											key={card.key}
+											className="flex items-center gap-2 rounded-full border bg-card px-3 py-1.5"
 										>
-											{creatingTemplate === template.id
-												? "Creating…"
-												: "Use"}
-										</Button>
-									</form>
-								</CardContent>
-							</Card>
-						))}
-					</div>
-				</div>
-			)}
-
-			{loading ? (
-				<p className="text-muted-foreground text-sm">Loading projects...</p>
-			) : projects.length === 0 ? (
-				<p className="text-muted-foreground text-sm">
-					No projects yet — create one above to start designing infrastructure.
-				</p>
-			) : (
-				<div className="grid gap-3">
-					{projects.map((project) => (
-						<div key={project._id}>
-							<Card>
-								<CardHeader className="pb-2">
-									<div className="flex items-center justify-between">
-										<CardTitle className="text-base">{project.name}</CardTitle>
-										{project.latestGraphVersion > 0 && (
-											<span className="rounded bg-muted px-2 py-0.5 text-muted-foreground text-xs">
-												v{project.latestGraphVersion}
+											<span className="text-[11px] font-medium text-muted-foreground">
+												{card.label}
 											</span>
-										)}
+											<span className="text-xs font-semibold text-foreground">
+												{card.format
+													? card.format(stats[card.key])
+													: stats[card.key]}
+											</span>
+										</div>
+									))
+								: Array.from({ length: 5 }).map((_, i) => (
+										<Skeleton key={i} className="h-7 w-24 rounded-full" />
+									))}
+						</div>
+
+						{/* templates — n8n template library look */}
+						{templates.length > 0 && (
+							<div className="mb-6">
+								<div className="mb-3 flex items-center gap-2">
+									<Sparkles className="size-3.5 text-muted-foreground" />
+									<h2 className="text-xs font-semibold text-foreground">
+										Start from a template
+									</h2>
+									<span className="text-[11px] text-muted-foreground">
+										Pre-loaded stack on the canvas
+									</span>
+								</div>
+								<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+									{templates.map((template) => (
+										<Card
+											key={template.id}
+											className="flex flex-col border bg-card shadow-none hover:border-border hover:shadow-sm"
+										>
+											<CardHeader className="pb-2">
+												<div className="flex items-center gap-2">
+													<span className="flex size-6 items-center justify-center rounded bg-muted text-muted-foreground">
+														<Boxes className="size-3.5" />
+													</span>
+													<CardTitle className="text-xs font-semibold text-foreground">
+														{template.name}
+													</CardTitle>
+												</div>
+												{template.description && (
+													<CardDescription className="line-clamp-2 text-[11px] leading-snug">
+														{template.description}
+													</CardDescription>
+												)}
+											</CardHeader>
+											<CardContent className="mt-auto flex flex-col gap-2 pt-0 pb-3">
+												<div className="flex flex-wrap gap-1">
+													{template.tags.slice(0, 3).map((tag) => (
+														<span
+															key={tag}
+															className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+														>
+															{tag}
+														</span>
+													))}
+												</div>
+												<form
+													className="flex gap-1.5"
+													onSubmit={(e) => {
+														e.preventDefault();
+														void createProjectFromTemplate(template);
+													}}
+												>
+													<Input
+														aria-label={`Name for ${template.name}`}
+														placeholder="Project name"
+														value={templateName}
+														onChange={(e) => setTemplateName(e.target.value)}
+														className="h-7 bg-muted text-xs"
+													/>
+													<Button
+														type="submit"
+														size="sm"
+														disabled={
+															creatingTemplate === template.id ||
+															!templateName.trim()
+														}
+														className="h-7 bg-brand px-3 text-xs text-white hover:bg-brand/90"
+													>
+														{creatingTemplate === template.id ? "…" : "Use"}
+													</Button>
+												</form>
+											</CardContent>
+										</Card>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* project list — n8n workflow cards */}
+						{loading ? (
+							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+								{Array.from({ length: 6 }).map((_, i) => (
+									<Skeleton key={i} className="h-28 rounded-lg" />
+								))}
+							</div>
+						) : filtered.length === 0 ? (
+							<Empty className="border border-dashed border-border bg-card">
+								<EmptyMedia variant="icon" className="bg-muted">
+									<Boxes className="size-5 text-muted-foreground" />
+								</EmptyMedia>
+								<EmptyHeader>
+									<EmptyTitle className="text-foreground">
+										{query ? "No matches" : "No workflows yet"}
+									</EmptyTitle>
+									<EmptyDescription>
+										{query
+											? `No projects match "${query}".`
+											: "Create your first project to start designing infrastructure on a canvas."}
+									</EmptyDescription>
+								</EmptyHeader>
+							</Empty>
+						) : (
+							<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+								{filtered.map((project) => (
+									<div
+										key={project._id}
+										className="group relative flex flex-col rounded-lg border bg-card p-4 transition hover:border-border hover:shadow-sm"
+									>
+										<div className="mb-3 flex items-start justify-between gap-2">
+											<Link
+												href={`/projects/${project._id}` as Route}
+												className="min-w-0 flex-1"
+											>
+												<h3 className="truncate text-sm font-semibold text-foreground group-hover:text-brand">
+													{project.name}
+												</h3>
+												<p className="mt-0.5 line-clamp-2 text-xs leading-snug text-muted-foreground">
+													{project.description || "No description"}
+												</p>
+											</Link>
+											<DropdownMenu>
+												<DropdownMenuTrigger
+													render={
+														<Button
+															variant="ghost"
+															size="icon-sm"
+															aria-label="Project actions"
+															className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+														>
+															<MoreHorizontal className="size-4" />
+														</Button>
+													}
+												/>
+												<DropdownMenuContent align="end">
+													<DropdownMenuItem onClick={() => void beginEdit(project)}>
+														Rename
+													</DropdownMenuItem>
+													<DropdownMenuItem
+														onClick={() =>
+															setHistoryProjectId(
+																historyProjectId === project._id ? null : project._id,
+															)
+														}
+													>
+														Executions
+													</DropdownMenuItem>
+													<DropdownMenuSeparator />
+													<DropdownMenuItem
+														variant="destructive"
+														onClick={() => void deleteProject(project)}
+													>
+														Delete
+													</DropdownMenuItem>
+												</DropdownMenuContent>
+											</DropdownMenu>
+										</div>
+										<div className="mt-auto flex items-center gap-2 text-[11px] text-muted-foreground">
+											<span className="inline-flex items-center gap-1">
+												<span className="size-1.5 rounded-full bg-[#22c55e]" />
+												Updated {formatUpdatedAt(project.updatedAt)}
+											</span>
+											{project.latestGraphVersion > 0 && (
+												<span className="ml-auto rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+													v{project.latestGraphVersion}
+												</span>
+											)}
+										</div>
+										<Link
+											href={`/projects/${project._id}` as Route}
+											className="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+											aria-label={`Open ${project.name}`}
+										>
+											<span className="sr-only">Open</span>
+										</Link>
 									</div>
-									{project.description && (
-										<CardDescription>{project.description}</CardDescription>
-									)}
-								</CardHeader>
-								{editingProjectId === project._id ? (
-									<CardContent className="grid gap-3 pt-0 pb-3">
-										<div className="grid gap-1.5">
-											<Input
-												aria-label="Project name"
-												value={editName}
-												onChange={(event) => setEditName(event.target.value)}
-											/>
-										</div>
-										<div className="grid gap-1.5">
-											<Input
-												aria-label="Project description"
-												placeholder="Description (optional)"
-												value={editDescription}
-												onChange={(event) =>
-													setEditDescription(event.target.value)
-												}
-											/>
-										</div>
+								))}
+							</div>
+						)}
+
+						{/* inline editor */}
+						{editingProjectId &&
+							!loading &&
+							projects.find((p) => p._id === editingProjectId) && (
+								<div className="mt-6 rounded-lg border bg-card p-4 shadow-sm">
+									<h2 className="mb-3 text-xs font-semibold text-foreground">Rename workflow</h2>
+									<div className="grid gap-3">
+										<Input
+											aria-label="Project name"
+											value={editName}
+											onChange={(e) => setEditName(e.target.value)}
+											className="bg-muted text-sm"
+										/>
+										<Input
+											aria-label="Project description"
+											placeholder="Description (optional)"
+											value={editDescription}
+											onChange={(e) => setEditDescription(e.target.value)}
+											className="bg-muted text-sm"
+										/>
 										<div className="flex justify-end gap-2">
 											<Button
 												variant="ghost"
 												size="sm"
 												onClick={() => setEditingProjectId(null)}
+												className="text-muted-foreground"
 											>
 												Cancel
 											</Button>
 											<Button
 												size="sm"
 												disabled={savingEdit || !editName.trim()}
-												onClick={() => void saveEdit(project)}
+												onClick={() => {
+													const project = projects.find((p) => p._id === editingProjectId);
+													if (project) void saveEdit(project);
+												}}
+												className="bg-brand text-white hover:bg-brand/90"
 											>
-												{savingEdit ? "Saving..." : "Save changes"}
+												{savingEdit ? "Saving…" : "Save"}
 											</Button>
 										</div>
-									</CardContent>
-								) : (
-									<CardContent className="flex items-center justify-between pb-3">
-										<span className="text-muted-foreground text-xs">
-											Updated {new Date(project.updatedAt).toLocaleString()}
-										</span>
-										<div className="flex gap-2">
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => void beginEdit(project)}
-											>
-												Edit
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() =>
-													setHistoryProjectId(
-														historyProjectId === project._id
-															? null
-															: project._id,
-													)
-												}
-											>
-												History
-											</Button>
-											<Link
-												href={`/projects/${project._id}` as Route}
-												className={buttonVariants({
-													variant: "outline",
-													size: "sm",
-												})}
-											>
-												Open canvas
-											</Link>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => void deleteProject(project)}
-											>
-												Delete
-											</Button>
-										</div>
-									</CardContent>
-								)}
-							</Card>
-							{historyProjectId === project._id && (
+									</div>
+								</div>
+							)}
+
+						{historyProjectId && (
+							<div className="mt-6">
 								<DeploymentHistory
-									projectId={project._id}
+									projectId={historyProjectId}
 									onClose={() => setHistoryProjectId(null)}
 								/>
-							)}
-						</div>
-					))}
+							</div>
+						)}
+					</div>
 				</div>
-			)}
-		</div>
+		</AppShell>
 	);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, buttonVariants } from "@my-better-t-app/ui/components/button";
+import { Button } from "@my-better-t-app/ui/components/button";
 import {
 	Card,
 	CardContent,
@@ -8,11 +8,29 @@ import {
 	CardHeader,
 	CardTitle,
 } from "@my-better-t-app/ui/components/card";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "@my-better-t-app/ui/components/empty";
 import { Input } from "@my-better-t-app/ui/components/input";
 import { Label } from "@my-better-t-app/ui/components/label";
+import { Skeleton } from "@my-better-t-app/ui/components/skeleton";
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@my-better-t-app/ui/components/table";
+import { Server } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { AppShell } from "@/components/app-shell";
 import type { AwsConnectionDto } from "@/lib/api";
 import { ApiError, api } from "@/lib/api";
 
@@ -118,12 +136,18 @@ export function AwsConnectionsManager() {
 	}
 
 	return (
-		<div className="container mx-auto max-w-3xl px-4 py-8">
-			<h1 className="mb-1 font-semibold text-xl">AWS connections</h1>
-			<p className="mb-6 text-muted-foreground text-sm">
-				Register an IAM role CloudMan may assume with STS. The worker never
-				stores long-term keys — each deployment receives temporary credentials.
-			</p>
+		<AppShell>
+			<div className="flex h-12 shrink-0 items-center border-b bg-card px-4 sm:px-6">
+				<h1 className="text-sm font-semibold text-foreground">AWS connections</h1>
+				<span className="ml-2 hidden text-xs text-muted-foreground sm:inline">
+					Register an IAM role CloudMan may assume with STS
+				</span>
+			</div>
+			<div className="flex-1 overflow-y-auto">
+				<div className="mx-auto max-w-5xl p-4 sm:p-6">
+					<p className="mb-6 text-sm text-muted-foreground">
+						The worker never stores long-term keys — each deployment receives temporary credentials.
+					</p>
 
 			<Card className="mb-6">
 				<CardHeader className="pb-2">
@@ -197,56 +221,83 @@ export function AwsConnectionsManager() {
 			</Card>
 
 			{loading ? (
-				<p className="text-muted-foreground text-sm">Loading connections...</p>
-			) : connections.length === 0 ? (
-				<p className="text-muted-foreground text-sm">
-					No connections registered yet.
-				</p>
-			) : (
-				<div className="grid gap-3">
-					{connections.map((connection) => (
-						<Card key={connection._id}>
-							<CardContent className="flex items-center justify-between py-4">
-								<div className="min-w-0">
-									<p className="font-medium text-sm">{connection.label}</p>
-									<p className="truncate font-mono text-[11px] text-muted-foreground">
-										{connection.roleArn}
-									</p>
-									<p className="text-[11px] text-muted-foreground">
-										region: {connection.region}
-									</p>
-								</div>
-								<div className="flex shrink-0 items-center gap-2">
-									<Button
-										disabled={verifyingId !== null}
-										size="sm"
-										variant="outline"
-										onClick={() => void verifyConnection(connection._id)}
-									>
-										{verifyingId === connection._id ? "Verifying..." : "Verify"}
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => void deleteConnection(connection)}
-									>
-										Remove
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
+				<div className="space-y-3">
+					{Array.from({ length: 2 }).map((_, index) => (
+						<Skeleton key={index} className="h-16 rounded-md" />
 					))}
+				</div>
+			) : connections.length === 0 ? (
+				<Empty className="border">
+					<EmptyMedia variant="icon">
+						<Server className="size-5" />
+					</EmptyMedia>
+					<EmptyHeader>
+						<EmptyTitle>No connections registered</EmptyTitle>
+						<EmptyDescription>
+							Add an IAM role above to let CloudMan deploy into your AWS
+							account.
+						</EmptyDescription>
+					</EmptyHeader>
+				</Empty>
+			) : (
+				<div className="rounded-lg border bg-card">
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead>Label</TableHead>
+								<TableHead>Role ARN</TableHead>
+								<TableHead>Region</TableHead>
+								<TableHead className="w-40">
+									<span className="sr-only">Actions</span>
+								</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{connections.map((connection) => (
+								<TableRow key={connection._id}>
+									<TableCell className="font-medium">
+										{connection.label}
+									</TableCell>
+									<TableCell className="max-w-[280px] truncate font-mono text-muted-foreground">
+										{connection.roleArn}
+									</TableCell>
+									<TableCell className="text-muted-foreground">
+										{connection.region}
+									</TableCell>
+									<TableCell>
+										<div className="flex items-center gap-1.5">
+											<Button
+												disabled={verifyingId !== null}
+												size="sm"
+												variant="outline"
+												onClick={() =>
+													void verifyConnection(connection._id)
+												}
+											>
+												{verifyingId === connection._id
+													? "Verifying..."
+													: "Verify"}
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() =>
+													void deleteConnection(connection)
+												}
+											>
+												Remove
+											</Button>
+										</div>
+									</TableCell>
+								</TableRow>
+							))}
+						</TableBody>
+					</Table>
 				</div>
 			)}
 
-			<div className="mt-6">
-				<a
-					href="/dashboard"
-					className={buttonVariants({ variant: "link", size: "sm" })}
-				>
-					← Back to projects
-				</a>
+				</div>
 			</div>
-		</div>
+		</AppShell>
 	);
 }

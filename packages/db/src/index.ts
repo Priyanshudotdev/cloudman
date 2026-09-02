@@ -19,6 +19,7 @@ export {
 	decryptSecret,
 	encryptSecret,
 	resolveExternalId,
+	resolveServerCredential,
 } from "./lib/crypto";
 export { AwsConnection } from "./models/aws-connection.model";
 export type { DeploymentStatus } from "./models/deployment.model";
@@ -28,3 +29,4 @@ export {
 } from "./models/deployment.model";
 export { GraphVersion } from "./models/graph-version.model";
 export { Project } from "./models/project.model";
+export { Server } from "./models/server.model";

@@ -17,9 +17,9 @@ import { toast } from "sonner";
 import type { CompileResultDto } from "@/lib/api";
 
 const SEVERITY_STYLES: Record<string, string> = {
-	high: "border-red-600/40 bg-red-600/10 text-red-400",
-	medium: "border-amber-500/40 bg-amber-500/10 text-amber-400",
-	low: "border-sky-500/40 bg-sky-500/10 text-sky-400",
+	high: "border-destructive/40 bg-destructive/10 text-destructive",
+	medium: "border-warning/40 bg-warning/10 text-warning",
+	low: "border-info/40 bg-info/10 text-info",
 };
 
 const CLOUDFORMATION_PATH = "template.json";
@@ -80,7 +80,7 @@ export function CompilePreview({
 						{riskCount > 0 && (
 							<Badge
 								variant="outline"
-								className="border-amber-500/40 text-amber-400"
+								className="border-warning/40 text-warning"
 							>
 								<AlertTriangle className="mr-1 size-3" />
 								{riskCount} warning{riskCount === 1 ? "" : "s"}
@@ -215,7 +215,7 @@ export function CompilePreview({
 								onClick={() => void copySelected()}
 							>
 								{copied ? (
-									<Check className="size-4 text-emerald-500" />
+									<Check className="size-4 text-success" />
 								) : (
 									<Copy className="size-4" />
 								)}

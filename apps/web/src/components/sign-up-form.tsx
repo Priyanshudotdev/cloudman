@@ -58,7 +58,9 @@ export default function SignUpForm({
 
 	return (
 		<div className="mx-auto mt-10 w-full max-w-md p-6">
-			<h1 className="mb-6 text-center font-bold text-3xl">Create Account</h1>
+			<h1 className="mb-6 text-center text-2xl font-semibold tracking-tight">
+				Create your account
+			</h1>
 
 			{env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === "true" && (
 				<>
@@ -104,7 +106,7 @@ export default function SignUpForm({
 									onChange={(e) => field.handleChange(e.target.value)}
 								/>
 								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
+									<p key={error?.message} className="text-destructive">
 										{error?.message}
 									</p>
 								))}
@@ -127,7 +129,7 @@ export default function SignUpForm({
 									onChange={(e) => field.handleChange(e.target.value)}
 								/>
 								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
+									<p key={error?.message} className="text-destructive">
 										{error?.message}
 									</p>
 								))}
@@ -150,7 +152,7 @@ export default function SignUpForm({
 									onChange={(e) => field.handleChange(e.target.value)}
 								/>
 								{field.state.meta.errors.map((error) => (
-									<p key={error?.message} className="text-red-500">
+									<p key={error?.message} className="text-destructive">
 										{error?.message}
 									</p>
 								))}
@@ -181,7 +183,7 @@ export default function SignUpForm({
 				<Button
 					variant="link"
 					onClick={onSwitchToSignIn}
-					className="text-indigo-600 hover:text-indigo-800"
+					className="text-brand hover:text-brand/80"
 				>
 					Already have an account? Sign In
 				</Button>
