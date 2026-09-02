@@ -9,6 +9,11 @@ representation (CloudMan IR), compiles it to OpenTofu, executes deployments thro
 isolated worker using AWS STS AssumeRole, and streams deployment state back to the
 frontend in real time.
 
+CloudMan also ships a **git-repo deployer**: point it at any GitHub repo, register one of
+your servers over SSH, and CloudMan clones the code, auto-detects the stack (Next.js,
+Vite/React, Node/Express, Python Flask/Django, Spring Boot), builds/renders the runtime
+startup unit, and deploys it to your own IP — no agent to install on the box.
+
 ## How it works
 
 ```
@@ -46,12 +51,13 @@ queued → initializing → planning → planned → awaiting_approval
 
 | Path                  | What it is                                                              |
 | --------------------- | ----------------------------------------------------------------------- |
-| `apps/web`            | Next.js 16 frontend — canvas editor, config panel, deploy drawer         |
-| `apps/api`            | Hono control-plane API — REST + Better Auth + SSE                        |
-| `apps/worker`         | Long-running worker — OpenTofu execution, STS AssumeRole                 |
+| `apps/web`            | Next.js 16 frontend — canvas editor, config panel, deploy drawer, servers & repo-deploy settings |
+| `apps/api`            | Hono control-plane API — REST + Better Auth + SSE + SSH verify           |
+| `apps/worker`         | Long-running worker — OpenTofu execution, STS AssumeRole, git-repo SSH deploy |
 | `packages/core`       | Domain engine: graph schema, validation, dependency resolution, **CloudMan IR**, IR→OpenTofu compiler, **CloudFormation export** |
-| `packages/queue`      | BullMQ queue definitions + Redis pub/sub event bus                       |
-| `packages/db`         | Mongoose models (projects, graph versions, deployments, AWS connections) |
+| `packages/queue`      | BullMQ queue definitions + Redis pub/sub event bus (infra-plan/apply, repo-deploy) |
+| `packages/db`         | Mongoose models (projects, graph versions, deployments, AWS connections, SSH servers) |
+| `packages/repo`       | Git-repo deploy domain: stack detection, build recipes, runtime rendering, deploy planning |
 | `packages/auth`       | Better Auth (email/password, optional Google OAuth) on the MongoDB adapter |
 | `packages/env`        | Type-safe environment schemas per app (`server`, `worker`, `queue`, `db`, `web`) |
 | `packages/ui`         | Shared shadcn-style components                                           |
