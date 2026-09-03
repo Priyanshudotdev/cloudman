@@ -1,0 +1,13 @@
+{
+	"$schema": "https://railway.com/railway.schema.json",
+	"build": {
+		"builder": "NIXPACKS",
+		"buildCommand": "cd ../.. && bun install && turbo run build --filter=web"
+	},
+	"deploy": {
+		"startCommand": "cd ../.. && turbo run start --filter=web",
+		"healthcheckPath": "/",
+		"restartPolicyType": "ON_FAILURE",
+		"restartPolicyMaxRetries": 3
+	}
+}
