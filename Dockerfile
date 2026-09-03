@@ -59,6 +59,5 @@ RUN curl -fsSL \
     && tofu version
 ENV CLOUDMAN_TOFU_AUTOINSTALL=0
 ENV CLOUDMAN_WORKSPACE_ROOT=/var/cloudman/workspaces
-VOLUME ["/var/cloudman/workspaces"]
 WORKDIR /app/apps/worker
 CMD ["bun", "run", "start"]
