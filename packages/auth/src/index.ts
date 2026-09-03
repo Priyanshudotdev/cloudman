@@ -9,6 +9,14 @@ export function createAuth(db: Db) {
 	return betterAuth({
 		database: mongodbAdapter(db),
 		trustedOrigins: [env.CORS_ORIGIN],
+		// Cross-domain setup: the web (auth UI) and the API live on different
+		// origins (e.g. web on Vercel, api on Railway). Browsers only attach a
+		// SameSite=Lax cookie on same-site requests, which would drop the session
+		// when the frontend calls the API cross-origin. Using SameSite=None (with
+		// Secure) lets the browser send the session cookie on those cross-site
+		// fetches; CORS already allows credentials for env.CORS_ORIGIN.
+		sameSite: "none",
+		useSecureCookies: true,
 		emailAndPassword: {
 			enabled: true,
 		},
