@@ -963,4 +963,70 @@ describe("api deployment lifecycle (mock worker)", () => {
 		const res = await request(app, "DELETE", `/api/projects/${project._id}`);
 		expect(res.status).toBe(409);
 	});
+
+	test("deletes a project despite a never-approved plan and cancels it", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "stuck-plan",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const deployment = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const body = (await json(deployment)) as {
+			deployment: { _id: string };
+		};
+		// A plan that reaches awaiting_approval was never applied — it must not
+		// permanently block deletion.
+		await deploymentModel.updateOne(
+			{ _id: body.deployment._id },
+			{ $set: { status: "awaiting_approval" } },
+		);
+
+		const res = await request(app, "DELETE", `/api/projects/${project._id}`);
+		expect(res.status).toBe(200);
+
+		// Awaiting-approval plans are never applied; deletion must succeed and
+		// remove the pending deployment along with the project.
+		const leftover = await deploymentModel.findById(body.deployment._id).lean();
+		expect(leftover).toBeNull();
+	});
+
+	test("deletes a project with a stale orphaned deploying deployment", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "stale-orphan",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const deployment = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const body = (await json(deployment)) as {
+			deployment: { _id: string };
+		};
+		// Simulate a worker that died mid-init: status stuck but the document was
+		// last updated more than an hour ago, so nothing is actually executing.
+		await deploymentModel.updateOne(
+			{ _id: body.deployment._id },
+			{
+				$set: {
+					status: "initializing",
+					updatedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+				},
+			},
+		);
+
+		const res = await request(app, "DELETE", `/api/projects/${project._id}`);
+		expect(res.status).toBe(200);
+	});
 });

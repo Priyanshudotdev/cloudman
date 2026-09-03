@@ -21,7 +21,7 @@ const projectSchema = new Schema(
 		repo: {
 			type: new Schema(
 				{
-					url: { type: String, required: true },
+					url: { type: String },
 					branch: { type: String, default: "main" },
 					/** Optional stack override fetched from packages/repo detection. */
 					defaultStack: { type: String },

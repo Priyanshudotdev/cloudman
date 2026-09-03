@@ -16,7 +16,7 @@ import {
 	useReactFlow,
 } from "@xyflow/react";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
@@ -111,6 +111,13 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [projectName, setProjectName] = useState("");
+	const [editingName, setEditingName] = useState(false);
+	const [draftName, setDraftName] = useState("");
+	const nameInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (editingName) nameInputRef.current?.focus();
+	}, [editingName]);
 	const [version, setVersion] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [issues, setIssues] = useState<ValidationIssueDto[]>([]);
@@ -389,6 +396,29 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 		}
 	}
 
+	async function handleRename() {
+		const name = draftName.trim();
+		if (!name) {
+			setDraftName(projectName);
+			setEditingName(false);
+			return;
+		}
+		try {
+			const { project } = await api<{ project: ProjectDto }>(
+				`/api/projects/${projectId}`,
+				{ method: "PUT", body: JSON.stringify({ name }) },
+			);
+			setProjectName(project.name);
+			toast.success("Project renamed");
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Failed to rename project",
+			);
+		} finally {
+			setEditingName(false);
+		}
+	}
+
 	const selectedSpec: ResourceUiSpec | null = selectedNode
 		? (RESOURCE_SPECS[selectedNode.data.resourceType] ?? null)
 		: null;
@@ -412,7 +442,43 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					← Projects
 				</Link>
 				<div className="mx-1 h-4 w-px shrink-0 bg-white/10" />
-				<span className="truncate text-sm font-medium text-white">{projectName}</span>
+				{editingName ? (
+					<input
+						ref={nameInputRef}
+						value={draftName}
+						onChange={(event) => setDraftName(event.target.value)}
+						onBlur={() => void handleRename()}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								void handleRename();
+							}
+							if (event.key === "Escape") {
+								setDraftName(projectName);
+								setEditingName(false);
+							}
+						}}
+						className="h-6 min-w-0 max-w-52 rounded-md border border-white/20 bg-[#1e1e1e] px-2 text-sm font-medium text-white focus:border-white/40 focus:outline-none"
+					/>
+				) : (
+					<button
+						type="button"
+						title="Rename project"
+						onClick={() => {
+							setDraftName(projectName);
+							setEditingName(true);
+						}}
+						className={
+							projectName === "Untitled project"
+								? "min-w-0 truncate text-sm font-medium italic text-white/60 hover:text-white"
+								: "min-w-0 truncate text-sm font-medium text-white hover:text-white/80"
+						}
+					>
+						{projectName === "Untitled project"
+							? "Name this project…"
+							: projectName}
+					</button>
+				)}
 				{version > 0 && (
 					<Badge variant="secondary" className="h-5 bg-white/10 px-1.5 text-[10px] font-normal text-white/70">
 						v{version}

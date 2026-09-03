@@ -85,7 +85,6 @@ export function ProjectHome() {
 	const [editDescription, setEditDescription] = useState("");
 	const [savingEdit, setSavingEdit] = useState(false);
 	const [templates, setTemplates] = useState<BlueprintDto[]>([]);
-	const [templateName, setTemplateName] = useState("");
 	const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null);
 	const [query, setQuery] = useState("");
 
@@ -160,19 +159,14 @@ export function ProjectHome() {
 	}
 
 	async function createProjectFromTemplate(blueprint: BlueprintDto) {
-		if (!templateName.trim()) return;
 		setCreatingTemplate(blueprint.id);
 		try {
 			const result = await api<{ project: ProjectDto }>("/api/projects", {
 				method: "POST",
-				body: JSON.stringify({
-					name: templateName.trim(),
-					blueprint: blueprint.id,
-				}),
+				body: JSON.stringify({ blueprint: blueprint.id }),
 			});
-			setTemplateName("");
 			toast.success(
-				`Project created from "${blueprint.name}" template — opening canvas`,
+				`Project created from "${blueprint.name}" template — name it on the canvas`,
 			);
 			await loadProjects();
 			window.location.href = `/projects/${result.project._id}`;
@@ -382,32 +376,17 @@ export function ProjectHome() {
 														</span>
 													))}
 												</div>
-												<form
-													className="flex gap-1.5"
-													onSubmit={(e) => {
-														e.preventDefault();
-														void createProjectFromTemplate(template);
-													}}
+												<Button
+													type="button"
+													size="sm"
+													disabled={creatingTemplate === template.id}
+													onClick={() => void createProjectFromTemplate(template)}
+													className="h-7 bg-brand px-3 text-xs text-white hover:bg-brand/90"
 												>
-													<Input
-														aria-label={`Name for ${template.name}`}
-														placeholder="Project name"
-														value={templateName}
-														onChange={(e) => setTemplateName(e.target.value)}
-														className="h-7 bg-muted text-xs"
-													/>
-													<Button
-														type="submit"
-														size="sm"
-														disabled={
-															creatingTemplate === template.id ||
-															!templateName.trim()
-														}
-														className="h-7 bg-brand px-3 text-xs text-white hover:bg-brand/90"
-													>
-														{creatingTemplate === template.id ? "…" : "Use"}
-													</Button>
-												</form>
+													{creatingTemplate === template.id
+														? "Creating…"
+														: "Use template"}
+												</Button>
 											</CardContent>
 										</Card>
 									))}
@@ -445,7 +424,7 @@ export function ProjectHome() {
 										key={project._id}
 										className="group relative flex flex-col rounded-lg border bg-card p-4 transition hover:border-border hover:shadow-sm"
 									>
-										<div className="mb-3 flex items-start justify-between gap-2">
+										<div className="relative z-10 mb-3 flex items-start justify-between gap-2">
 											<Link
 												href={`/projects/${project._id}` as Route}
 												className="min-w-0 flex-1"

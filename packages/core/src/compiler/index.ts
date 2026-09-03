@@ -7,7 +7,7 @@ export interface CompiledFile {
 }
 
 export interface CompileOptions {
-	/** Suffix mixed into auto-generated S3 bucket names for global uniqueness. */
+	/** Suffix mixed into auto-generated AWS resource names for global uniqueness. */
 	bucketNameSuffix?: string;
 }
 
@@ -174,6 +174,7 @@ function writeSubnet(
 	writer: HclWriter,
 	resource: IRResource,
 	addressById: Map<string, string>,
+	synthesizedPublicSubnets: ReadonlySet<string> = new Set(),
 ): void {
 	writer.block(`resource "aws_subnet" "${resource.name}"`, () => {
 		const vpcRef = resource.attributes.vpc_ref;
@@ -185,6 +186,10 @@ function writeSubnet(
 		const az = resource.attributes.availability_zone;
 		if (typeof az === "string")
 			writer.line(`availability_zone = ${hclString(az)}`);
+
+		if (synthesizedPublicSubnets.has(resource.irId)) {
+			writer.line("map_public_ip_on_launch = true");
+		}
 
 		writeTags(writer, resource.label ?? resource.name);
 		const deps = dependencyAddresses(resource, addressById);
@@ -760,6 +765,7 @@ function writeEcs(
 	writer: HclWriter,
 	resource: IRResource,
 	ctx: CompileContext,
+	synthesizedPublicSubnets: ReadonlySet<string> = new Set(),
 ): void {
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
 	const base = resource.name;
@@ -902,8 +908,13 @@ function writeEcs(
 					`security_groups  = [${sgRefs.map((ref) => refAddress(ctx.addressById, ref)).join(", ")}]`,
 				);
 			}
+			// Tasks in a synthesized-public VPC get public IPs so they can pull
+			// images and reach the internet through the auto-created IGW route.
+			const autoPublicIp = subnetRefs.some((ref) =>
+				synthesizedPublicSubnets.has(ref),
+			);
 			writer.line(
-				`assign_public_ip = ${resource.attributes.assign_public_ip === true}`,
+				`assign_public_ip = ${resource.attributes.assign_public_ip === true || autoPublicIp}`,
 			);
 		});
 		writeTags(writer, `${resource.label ?? resource.name} service`);
@@ -1216,7 +1227,7 @@ function writeIamRole(
 	const roleName = hclString(
 		(typeof resource.attributes.role_name === "string"
 			? resource.attributes.role_name
-			: `cloudman-${resource.name}`
+			: `cloudman-${resource.name}-${ctx.options.bucketNameSuffix ?? "change-me"}`
 		).slice(0, 64),
 	);
 
@@ -1254,7 +1265,7 @@ function writeIamPolicy(
 	const policyName = hclString(
 		(typeof resource.attributes.policy_name === "string"
 			? resource.attributes.policy_name
-			: `cloudman-${resource.name}`
+			: `cloudman-${resource.name}-${ctx.options.bucketNameSuffix ?? "change-me"}`
 		).slice(0, 128),
 	);
 
@@ -1316,7 +1327,10 @@ function writeSqs(
 ): void {
 	const fifo = resource.attributes.fifo_queue === true;
 	const queueName = hclString(
-		`cloudman-${resource.name}${fifo ? ".fifo" : ""}`.slice(0, 80),
+		`cloudman-${resource.name}-${ctx.options.bucketNameSuffix ?? "change-me"}${fifo ? ".fifo" : ""}`.slice(
+			0,
+			80,
+		),
 	);
 
 	writer.block(`resource "aws_sqs_queue" "${resource.name}"`, () => {
@@ -1617,6 +1631,52 @@ function writeApiGateway(
 	);
 }
 
+/**
+ * Finds VPCs that require public internet access but have no internet gateway
+ * node, so the compiler can synthesize one. A VPC needs it when an
+ * internet-facing ALB (the default) is placed in its subnets.
+ */
+function planInternetNetworking(document: IRDocument): {
+	vpcs: Map<string, string[]>;
+	publicSubnets: Set<string>;
+} {
+	const subnetVpc = new Map<string, string>();
+	for (const resource of document.resources) {
+		if (resource.kind !== "aws_subnet") continue;
+		const vpcRef = resource.attributes.vpc_ref;
+		if (typeof vpcRef === "string") subnetVpc.set(resource.irId, vpcRef);
+	}
+
+	const vpcsWithIgw = new Set<string>();
+	for (const resource of document.resources) {
+		if (
+			resource.kind === "aws_internet_gateway" &&
+			typeof resource.attributes.vpc_ref === "string"
+		) {
+			vpcsWithIgw.add(resource.attributes.vpc_ref);
+		}
+	}
+
+	const vpcs = new Map<string, string[]>();
+	const publicSubnets = new Set<string>();
+	for (const resource of document.resources) {
+		if (resource.kind !== "aws_lb" || resource.attributes.internal === true)
+			continue;
+		const subnetRefs = resource.attributes.subnet_refs;
+		if (!Array.isArray(subnetRefs)) continue;
+		for (const ref of subnetRefs) {
+			if (typeof ref !== "string") continue;
+			const vpcRef = subnetVpc.get(ref);
+			if (vpcRef === undefined || vpcsWithIgw.has(vpcRef)) continue;
+			const list = vpcs.get(vpcRef) ?? [];
+			list.push(ref);
+			vpcs.set(vpcRef, list);
+			publicSubnets.add(ref);
+		}
+	}
+	return { vpcs, publicSubnets };
+}
+
 export function compileIR(
 	document: IRDocument,
 	options: CompileOptions = {},
@@ -1643,6 +1703,8 @@ export function compileIR(
 		(r) => r.kind === "aws_instance" && !r.attributes.ami,
 	);
 
+	const internet = planInternetNetworking(document);
+
 	const main = new HclWriter();
 	if (needsBaseAmi) {
 		main.line(BASE_AMI_DATA_SOURCE);
@@ -1661,7 +1723,7 @@ export function compileIR(
 				writeVpc(main, resource, addressById);
 				break;
 			case "aws_subnet":
-				writeSubnet(main, resource, addressById);
+				writeSubnet(main, resource, addressById, internet.publicSubnets);
 				break;
 			case "aws_security_group":
 				writeSecurityGroup(main, resource, addressById);
@@ -1688,7 +1750,7 @@ export function compileIR(
 				writeLambda(main, resource, ctx);
 				break;
 			case "aws_ecs_cluster":
-				writeEcs(main, resource, ctx);
+				writeEcs(main, resource, ctx, internet.publicSubnets);
 				break;
 			case "aws_ebs_volume":
 				writeEbs(main, resource, ctx);

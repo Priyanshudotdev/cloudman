@@ -45,7 +45,7 @@ export function createProjectsRoute(
 	}
 
 	const createProjectSchema = z.object({
-		name: z.string().min(1).max(120),
+		name: z.string().trim().max(120).optional(),
 		description: z.string().max(500).default(""),
 		blueprint: z.string().optional(),
 		kind: z.enum(["infra", "repo"]).default("infra"),
@@ -94,7 +94,7 @@ export function createProjectsRoute(
 		}
 
 		const project = await Project.create({
-			name: body.data.name,
+			name: body.data.name?.trim() || "Untitled project",
 			description: body.data.description,
 			ownerUserId: c.get("userId"),
 			...(kind === "repo"
@@ -238,19 +238,23 @@ export function createProjectsRoute(
 		const project = await loadOwnedProject(c, id);
 		if (!project) return c.json({ error: "Not found" }, 404);
 
-		const activeStatuses = [
+		const executingStatuses = [
 			"queued",
 			"initializing",
 			"planning",
 			"planned",
-			"awaiting_approval",
 			"apply_queued",
 			"applying",
 		] as const;
+		// A deployment only blocks deletion while its worker is actually running.
+		// If nothing has updated the deployment in an hour, the worker is gone
+		// (crashed/stopped) — the plan/apply process cannot be executing anymore.
+		const staleThreshold = new Date(Date.now() - 60 * 60 * 1000);
 		if (
 			await Deployment.exists({
 				projectId: id,
-				status: { $in: activeStatuses },
+				status: { $in: executingStatuses },
+				updatedAt: { $gte: staleThreshold },
 			})
 		) {
 			return c.json(
@@ -274,6 +278,17 @@ export function createProjectsRoute(
 				409,
 			);
 		}
+
+		// Cancel stale/never-approved deployments instead of blocking deletion.
+		// awaiting_approval plans are not applied yet (no infra changes made), and
+		// any executing-state deployment is stale by the time we get here.
+		await Deployment.updateMany(
+			{
+				projectId: id,
+				status: { $in: [...executingStatuses, "awaiting_approval"] },
+			},
+			{ $set: { status: "canceled", updatedAt: new Date() } },
+		);
 
 		await Promise.all([
 			GraphVersion.deleteMany({ projectId: id }),
