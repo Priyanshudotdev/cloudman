@@ -216,9 +216,11 @@ describe("api health + auth", () => {
 		expect(res.status).toBe(404);
 	});
 
-	test("protected routes reject anonymous users", async () => {
+	test("protected routes fall back to the shared anonymous user", async () => {
+		// Auth pass-through: without a session the request is still served,
+		// scoped to a single shared workspace user instead of being rejected.
 		const res = await realAuthApp.request("/api/projects");
-		expect(res.status).toBe(401);
+		expect(res.status).toBe(200);
 	});
 });
 
