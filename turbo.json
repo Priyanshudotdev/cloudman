@@ -1,6 +1,31 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"ui": "tui",
+	"globalEnv": [
+		"NODE_ENV",
+		"DATABASE_URL",
+		"MONGO_URL",
+		"REDIS_URL",
+		"BETTER_AUTH_SECRET",
+		"BETTER_AUTH_URL",
+		"CORS_ORIGIN",
+		"PORT",
+		"AWS_REGION",
+		"AWS_ACCESS_KEY_ID",
+		"AWS_SECRET_ACCESS_KEY",
+		"CLOUDMAN_SECRET",
+		"CLOUDMAN_WORKER_MOCK",
+		"GOOGLE_CLIENT_ID",
+		"GOOGLE_CLIENT_SECRET",
+		"OPENROUTER_API_KEY",
+		"CLOUDMAN_LLM_GENERATION",
+		"NEXT_PUBLIC_API_URL",
+		"NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED",
+		"SKIP_ENV_VALIDATION",
+		"VERCEL_URL",
+		"VERCEL_ENV",
+		"VERCEL_PROJECT_PRODUCTION_URL"
+	],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
