@@ -1,5 +1,9 @@
 "use client";
 
+// NOTE: there is no backend variables API — values are stored per-browser in
+// localStorage ("cm.vars"). Kept as-is so they can feed future server-side
+// template/canvas substitution without a data migration.
+
 import { Button } from "@my-better-t-app/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@my-better-t-app/ui/components/card";
 import { Input } from "@my-better-t-app/ui/components/input";

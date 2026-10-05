@@ -271,6 +271,13 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				default: "postgres",
 			},
 			{
+				key: "engineVersion",
+				label: "Engine version",
+				type: "text",
+				optional: true,
+				placeholder: "15.4 (default: engine default)",
+			},
+			{
 				key: "instanceClass",
 				label: "Instance class",
 				type: "select",
@@ -290,6 +297,12 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				label: "Database name",
 				type: "text",
 				default: "appdb",
+			},
+			{
+				key: "username",
+				label: "Master username",
+				type: "text",
+				default: "cloudman_admin",
 			},
 			{
 				key: "publiclyAccessible",
@@ -495,6 +508,13 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				default: "latest",
 			},
 			{
+				key: "image",
+				label: "Image override",
+				type: "text",
+				optional: true,
+				placeholder: "nginx:latest (overrides wired ECR repo)",
+			},
+			{
 				key: "assignPublicIp",
 				label: "Assign public IP",
 				type: "boolean",
@@ -522,7 +542,7 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				key: "type",
 				label: "Volume type",
 				type: "select",
-				options: ["gp3", "gp2", "io1", "io2", "sc1", "st1", "standard"],
+				options: ["gp3", "gp2", "io1", "st1", "sc1"],
 				default: "gp3",
 			},
 			{
@@ -566,7 +586,7 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				key: "throughputMode",
 				label: "Throughput mode",
 				type: "select",
-				options: ["bursting", "elastic", "provisioned"],
+				options: ["bursting", "elastic"],
 				default: "elastic",
 			},
 			{
@@ -667,6 +687,13 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 				max: 65535,
 				optional: true,
 			},
+			{
+				key: "parameterGroupName",
+				label: "Parameter group",
+				type: "text",
+				optional: true,
+				placeholder: "default.redis7",
+			},
 		],
 	},
 	aws_iam_role: {
@@ -704,6 +731,20 @@ export const RESOURCE_SPECS: Record<string, ResourceUiSpec> = {
 		idPrefix: "policy",
 		fields: [
 			{ key: "name", label: "Policy name", type: "text", optional: true },
+			{
+				key: "actions",
+				label: "Actions",
+				type: "list",
+				itemType: "text",
+				placeholder: "s3:GetObject",
+			},
+			{
+				key: "resources",
+				label: "Resources",
+				type: "list",
+				itemType: "text",
+				placeholder: "arn:aws:s3:::my-bucket/*",
+			},
 		],
 	},
 	aws_sqs: {

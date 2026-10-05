@@ -6,6 +6,7 @@
 		"dev": "next dev --port 3001",
 		"build": "next build",
 		"check-types": "tsc --noEmit",
+		"generate-catalog": "tsx scripts/generate-catalog.ts",
 		"start": "next start"
 	},
 	"dependencies": {

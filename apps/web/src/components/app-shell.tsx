@@ -1,12 +1,15 @@
 "use client";
 
-import { Boxes, Cloud, FileStack, HelpCircle, LayoutDashboard, Variable } from "lucide-react";
+import { Boxes, Cloud, FileStack, HelpCircle, LayoutDashboard, Server, Variable } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import { ApiStatus } from "./api-status";
 
 const NAV_TOP = [
 	{ href: "/dashboard", label: "Overview", icon: LayoutDashboard },
 	{ href: "/settings/aws", label: "AWS", icon: Boxes },
+	{ href: "/settings/servers", label: "Servers", icon: Server },
 ] as const;
 
 const NAV_BOTTOM = [
@@ -50,23 +53,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 						);
 					})}
 				</nav>
-				<div className="flex flex-col gap-1 border-t border-white/10 p-2">
-					{NAV_BOTTOM.map((item) => {
-						const active = isActive(pathname, item.href);
-						return (
-							<Link
-								key={item.href}
-								href={item.href as any}
-								className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] leading-none transition-colors ${
-									active ? "bg-white/[0.08] text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"
-								}`}
-							>
-								<item.icon className="size-4" />
-								<span>{item.label}</span>
-							</Link>
-						);
-					})}
+			<div className="flex flex-col gap-1 border-t border-white/10 p-2">
+				{NAV_BOTTOM.map((item) => {
+					const active = isActive(pathname, item.href);
+					return (
+						<Link
+							key={item.href}
+							href={item.href as any}
+							className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] leading-none transition-colors ${
+								active ? "bg-white/[0.08] text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"
+							}`}
+						>
+							<item.icon className="size-4" />
+							<span>{item.label}</span>
+						</Link>
+					);
+				})}
+				<div className="flex justify-center border-t border-white/10 pt-1">
+					<ApiStatus compact />
 				</div>
+			</div>
 			</aside>
 			<div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
 				{children}

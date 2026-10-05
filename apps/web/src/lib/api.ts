@@ -88,11 +88,22 @@ export interface DeploymentEventDto {
 	data?: unknown;
 }
 
+export type DeploymentStatus =
+	| "queued"
+	| "initializing"
+	| "planning"
+	| "awaiting_approval"
+	| "apply_queued"
+	| "applying"
+	| "completed"
+	| "failed"
+	| "canceled";
+
 export interface DeploymentDto {
 	_id: string;
 	projectId: string;
 	graphVersionId: string;
-	status: string;
+	status: DeploymentStatus;
 	action?: "provision" | "destroy";
 	region?: string;
 	planSummary?: {

@@ -39,6 +39,7 @@ import { CompilePreview } from "./compile-preview";
 import { ConfigPanel } from "./config-panel";
 import { DeployPanel } from "./deploy-panel";
 import { GraphVersions } from "./graph-versions";
+import { DeploymentHistory } from "../deployments/deployment-history";
 import { type ResourceFlowNode, ResourceNode } from "./resource-node";
 
 const nodeTypes = { resource: ResourceNode };
@@ -123,6 +124,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	const [issues, setIssues] = useState<ValidationIssueDto[]>([]);
 	const [busy, setBusy] = useState(false);
 	const [deployOpen, setDeployOpen] = useState(false);
+	const [view, setView] = useState<"editor" | "executions">("editor");
 	const [deployAction, setDeployAction] = useState<"provision" | "destroy">(
 		"provision",
 	);
@@ -491,11 +493,25 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 				{/* center: Editor / Executions */}
 				<div className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 lg:flex">
 					<div className="flex rounded-md bg-[#1e1e1e] p-0.5">
-						<span className="rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]">Editor</span>
 						<button
 							type="button"
-							className="px-3 py-1 text-xs text-white/50 hover:text-white/80"
-							onClick={() => toast.info("Executions coming soon")}
+							onClick={() => setView("editor")}
+							className={
+								view === "editor"
+									? "rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]"
+									: "px-3 py-1 text-xs text-white/50 hover:text-white/80"
+							}
+						>
+							Editor
+						</button>
+						<button
+							type="button"
+							onClick={() => setView("executions")}
+							className={
+								view === "executions"
+									? "rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]"
+									: "px-3 py-1 text-xs text-white/50 hover:text-white/80"
+							}
 						>
 							Executions
 						</button>
@@ -678,6 +694,17 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							action={deployAction}
 							onClose={() => setDeployOpen(false)}
 						/>
+					)}
+
+					{view === "executions" && (
+						<div className="absolute inset-0 z-10 overflow-y-auto bg-[#1e1e1e] p-4">
+							<div className="mx-auto max-w-3xl">
+								<DeploymentHistory
+									projectId={projectId}
+									onClose={() => setView("editor")}
+								/>
+							</div>
+						</div>
 					)}
 
 					{preview && (

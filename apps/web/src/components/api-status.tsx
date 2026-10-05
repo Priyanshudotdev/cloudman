@@ -2,6 +2,7 @@
 
 import { Badge } from "@my-better-t-app/ui/components/badge";
 import { Button } from "@my-better-t-app/ui/components/button";
+import { cn } from "@my-better-t-app/ui/lib/utils";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -14,7 +15,7 @@ interface HealthDto {
 
 type HealthState = "loading" | "ok" | "down";
 
-export function ApiStatus() {
+export function ApiStatus({ compact = false }: { compact?: boolean }) {
 	const [state, setState] = useState<HealthState>("loading");
 	const [service, setService] = useState("");
 	const [refreshKey, setRefreshKey] = useState(0);
@@ -45,6 +46,35 @@ export function ApiStatus() {
 		) : (
 			<Badge variant="destructive">Unreachable</Badge>
 		);
+
+	if (compact) {
+		return (
+			<button
+				type="button"
+				title={
+					state === "ok"
+						? `API online${service ? ` (${service})` : ""}`
+						: state === "down"
+							? "API unreachable — click to retry"
+							: "Checking API…"
+				}
+				aria-label="API status"
+				onClick={() => {
+					if (state === "down") setRefreshKey((current) => current + 1);
+				}}
+				className="flex items-center justify-center rounded-md p-2 transition-colors hover:bg-white/5"
+			>
+				<span
+					className={cn(
+						"size-2 rounded-full",
+						state === "ok" && "bg-emerald-400",
+						state === "down" && "bg-red-400",
+						state === "loading" && "animate-pulse bg-white/30",
+					)}
+				/>
+			</button>
+		);
+	}
 
 	return (
 		<div className="flex items-center justify-between rounded-lg border p-4">
