@@ -196,3 +196,12 @@ export async function resolveTofuBinary(): Promise<string> {
 	if (await commandExists("tofu")) return "tofu";
 	return autoInstallTofu();
 }
+
+let cachedBinary: string | null = null;
+
+/** Shared cached binary resolution for plan/apply jobs. */
+export async function resolveCachedBinary(): Promise<string> {
+	if (cachedBinary) return cachedBinary;
+	cachedBinary = await resolveTofuBinary();
+	return cachedBinary;
+}

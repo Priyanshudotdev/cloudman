@@ -22,6 +22,7 @@ export function getPlanQueue(): Queue<InfraPlanJobData> {
 		defaultJobOptions: {
 			removeOnComplete: 200,
 			removeOnFail: 200,
+			// Retries are manual via POST /:id/retry (clears the retained job first).
 			attempts: 1,
 		},
 	});
@@ -36,6 +37,7 @@ export function getApplyQueue(): Queue<InfraApplyJobData> {
 		defaultJobOptions: {
 			removeOnComplete: 200,
 			removeOnFail: 200,
+			// Retries are manual via POST /:id/retry (clears the retained job first).
 			attempts: 1,
 		},
 	});
@@ -65,6 +67,7 @@ export function getRepoQueue(): Queue<RepoJobData> {
 		defaultJobOptions: {
 			removeOnComplete: 200,
 			removeOnFail: 200,
+			// Retries are manual via POST /:id/retry (clears the retained job first).
 			attempts: 1,
 		},
 	});

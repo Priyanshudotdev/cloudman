@@ -8,7 +8,7 @@ import type { InfraApplyJobData } from "@my-better-t-app/queue";
 import type { Job } from "bullmq";
 import { resolveAwsCredentials } from "../lib/aws";
 import { recordDeploymentEvent, sleep, tail } from "../lib/events";
-import { runTofu } from "../lib/tofu";
+import { resolveCachedBinary, runTofu } from "../lib/tofu";
 import { cleanupWorkspace, workspacePath } from "../lib/workspace";
 
 function awsEnv(
@@ -47,11 +47,14 @@ export async function handleApplyJob(
 		const conn = await AwsConnection.findById(
 			deployment.awsConnectionId,
 		).lean();
-		if (conn)
-			connection = {
-				roleArn: conn.roleArn,
-				externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
-			};
+		if (!conn)
+			throw new Error(
+				`AWS connection ${deployment.awsConnectionId} not found; refusing to deploy with fallback credentials`,
+			);
+		connection = {
+			roleArn: conn.roleArn,
+			externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
+		};
 	}
 
 	const region = deployment.region ?? env.AWS_REGION;
@@ -60,6 +63,14 @@ export async function handleApplyJob(
 	const projectId = String(deployment.projectId);
 
 	try {
+		const preApply = await Deployment.findById(deploymentId)
+			.select("status")
+			.lean();
+		if (preApply?.status === "canceled") {
+			console.log("[worker] apply job aborted — deployment was canceled");
+			return;
+		}
+
 		await recordDeploymentEvent(
 			deploymentId,
 			{
@@ -82,7 +93,7 @@ export async function handleApplyJob(
 			}
 			await sleep(500);
 		} else {
-			const binary = await resolveBinary();
+			const binary = await resolveCachedBinary();
 			const creds = await resolveAwsCredentials(connection, deploymentId);
 			const cwd = workspacePath(projectId);
 
@@ -97,11 +108,20 @@ export async function handleApplyJob(
 						void recordDeploymentEvent(deploymentId, {
 							level: "progress",
 							message: line.trim(),
-						});
+						}).catch((err) =>
+							console.error(
+								"[worker] apply progress event failed:",
+								err instanceof Error ? err.message : err,
+							),
+						);
 					},
 				},
 			);
 
+			if (apply.timedOut)
+				throw new Error(
+					`OpenTofu tofu apply timed out after ${20 * 60 * 1000}ms`,
+				);
 			if (apply.code !== 0) {
 				throw new Error(
 					`tofu apply failed with exit code ${apply.code}:\n${tail(apply.output)}`,
@@ -113,6 +133,14 @@ export async function handleApplyJob(
 		// project workspace. Provision keeps it for future destroys.
 		if (isDestroy) {
 			await cleanupWorkspace(projectId);
+		}
+
+		const preComplete = await Deployment.findById(deploymentId)
+			.select("status")
+			.lean();
+		if (preComplete?.status === "canceled") {
+			console.log("[worker] apply job aborted — deployment was canceled");
+			return;
 		}
 
 		await Deployment.updateOne(
@@ -137,6 +165,16 @@ export async function handleApplyJob(
 		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		await Deployment.updateOne(
+			{ _id: deploymentId },
+			{
+				$set: {
+					status: "failed",
+					error: message.slice(0, 500),
+					updatedAt: new Date(),
+				},
+			},
+		);
 		await recordDeploymentEvent(
 			deploymentId,
 			{ level: "error", message: `Apply failed: ${message}` },
@@ -144,13 +182,4 @@ export async function handleApplyJob(
 		);
 		throw error;
 	}
-}
-
-let cachedBinary: string | null = null;
-
-async function resolveBinary(): Promise<string> {
-	if (cachedBinary) return cachedBinary;
-	const { resolveTofuBinary } = await import("../lib/tofu");
-	cachedBinary = await resolveTofuBinary();
-	return cachedBinary;
 }

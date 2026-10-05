@@ -18,7 +18,7 @@ import {
 	ensureStateBucket,
 	stateBucketName,
 } from "../lib/state-backend";
-import { runTofu, type TofuRunResult } from "../lib/tofu";
+import { resolveCachedBinary, runTofu, type TofuRunResult } from "../lib/tofu";
 import { prepareWorkspace } from "../lib/workspace";
 
 interface TofuPlanJson {
@@ -113,11 +113,14 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 		const conn = await AwsConnection.findById(
 			deployment.awsConnectionId,
 		).lean();
-		if (conn)
-			connection = {
-				roleArn: conn.roleArn,
-				externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
-			};
+		if (!conn)
+			throw new Error(
+				`AWS connection ${deployment.awsConnectionId} not found; refusing to deploy with fallback credentials`,
+			);
+		connection = {
+			roleArn: conn.roleArn,
+			externalId: resolveExternalId(conn.externalId, env.CLOUDMAN_SECRET),
+		};
 	}
 
 	const region = deployment.region ?? env.AWS_REGION;
@@ -183,7 +186,7 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 			);
 			summary = await mockSummary(built.document, isDestroy);
 		} else {
-			const binary = await resolveBinary();
+			const binary = await resolveCachedBinary();
 			const creds = await resolveAwsCredentials(connection, deploymentId);
 			await recordDeploymentEvent(deploymentId, {
 				level: "info",
@@ -220,7 +223,7 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 					timeoutMs: 15 * 60 * 1000,
 				},
 			);
-			throwOnFailure(init, "tofu init");
+			throwOnFailure(init, "tofu init", 15 * 60 * 1000);
 
 			await recordDeploymentEvent(deploymentId, {
 				level: "progress",
@@ -231,7 +234,7 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 				env: extraEnv,
 				timeoutMs: 2 * 60 * 1000,
 			});
-			throwOnFailure(validate, "tofu validate");
+			throwOnFailure(validate, "tofu validate", 2 * 60 * 1000);
 
 			await recordDeploymentEvent(
 				deploymentId,
@@ -261,18 +264,27 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 							void recordDeploymentEvent(deploymentId, {
 								level: "info",
 								message: line.trim(),
-							});
+							}).catch((err) =>
+								console.error(
+									"[worker] plan progress event failed:",
+									err instanceof Error ? err.message : err,
+								),
+							);
 						}
 					},
 				},
 			);
-			throwOnFailure(plan, "tofu plan");
+			throwOnFailure(plan, "tofu plan", 10 * 60 * 1000);
 
 			const show = await runTofu(binary, ["show", "-json", "tfplan.bin"], {
 				cwd,
 				env: extraEnv,
 				timeoutMs: 2 * 60 * 1000,
 			});
+			if (show.timedOut)
+				throw new Error(
+					`OpenTofu tofu show timed out after ${2 * 60 * 1000}ms`,
+				);
 			if (show.code !== 0)
 				throw new Error(`tofu show failed:\n${tail(show.output)}`);
 
@@ -311,6 +323,16 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 		);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		await Deployment.updateOne(
+			{ _id: deploymentId },
+			{
+				$set: {
+					status: "failed",
+					error: message.slice(0, 500),
+					updatedAt: new Date(),
+				},
+			},
+		);
 		await recordDeploymentEvent(
 			deploymentId,
 			{ level: "error", message: `Deployment failed: ${message}` },
@@ -320,16 +342,14 @@ export async function handlePlanJob(job: Job<InfraPlanJobData>): Promise<void> {
 	}
 }
 
-let cachedBinary: string | null = null;
-
-async function resolveBinary(): Promise<string> {
-	if (cachedBinary) return cachedBinary;
-	const { resolveTofuBinary } = await import("../lib/tofu");
-	cachedBinary = await resolveTofuBinary();
-	return cachedBinary;
-}
-
-function throwOnFailure(result: TofuRunResult, step: string): void {
+function throwOnFailure(
+	result: TofuRunResult,
+	step: string,
+	timeoutMs: number,
+): void {
+	if (result.timedOut) {
+		throw new Error(`OpenTofu ${step} timed out after ${timeoutMs}ms`);
+	}
 	if (result.code !== 0) {
 		throw new Error(
 			`${step} failed with exit code ${result.code}:\n${tail(result.output)}`,

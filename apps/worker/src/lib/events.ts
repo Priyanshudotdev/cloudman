@@ -71,3 +71,8 @@ export function tail(text: string, maxLines = 25): string {
 	const lines = text.trimEnd().split(/\r?\n/);
 	return lines.slice(-maxLines).join("\n");
 }
+
+export async function closeEventPublisher(): Promise<void> {
+	publisher.removeAllListeners();
+	await publisher.quit().catch(() => {});
+}
