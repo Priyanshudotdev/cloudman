@@ -140,13 +140,36 @@ const RECIPES: Record<Exclude<DetectedStack, "unsupported">, BuildRecipe> = {
 	},
 };
 
-/** Build recipe for a detected stack; `unsupported` returns null. */
+/**
+ * Build recipe for a detected stack; `unsupported` returns null.
+ *
+ * Overrides:
+ * - `overrides.stack` acts as a manual classification and wins over the
+ *   `stack` argument (an explicit `"unsupported"` still returns null).
+ * - `overrides.forceStatic` forces a static `processType` when the recipe
+ *   supports it, else returns null. Only already-static recipes and
+ *   `next-node` (which maps to the `next-static` export recipe) support it;
+ *   server-only stacks (express/flask/django/spring) cannot be hosted
+ *   statically.
+ */
 export function buildRecipe(
 	stack: DetectedStack,
 	overrides?: OverrideConfig,
 ): BuildRecipe | null {
-	if (stack === "unsupported") return null;
-	return applyOverrides(RECIPES[stack], overrides);
+	const effective = overrides?.stack ?? stack;
+	if (effective === "unsupported") return null;
+	const base = RECIPES[effective as Exclude<DetectedStack, "unsupported">];
+	if (!base) return null;
+	if (overrides?.forceStatic) {
+		if (base.processType === "static") {
+			return applyOverrides(base, overrides);
+		}
+		if (effective === "next-node") {
+			return applyOverrides(RECIPES["next-static"], overrides);
+		}
+		return null;
+	}
+	return applyOverrides(base, overrides);
 }
 
 /** Validate an artifact spec entry: must be a relative, non-escaped path. */

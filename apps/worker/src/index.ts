@@ -7,13 +7,16 @@ import {
 	type InfraPlanJobData,
 	MAINTENANCE_QUEUE,
 	type MaintenanceJobData,
+	REPO_QUEUE,
+	type RepoJobData,
 } from "@my-better-t-app/queue";
 import { Worker } from "bullmq";
 import Redis from "ioredis";
 
 import { handleApplyJob } from "./jobs/apply";
 import { handlePlanJob } from "./jobs/plan";
-import { recordDeploymentEvent } from "./lib/events";
+import { handleRepoDeployJob } from "./jobs/repo-deploy";
+import { closeEventPublisher, recordDeploymentEvent } from "./lib/events";
 import { cleanupWorkspace } from "./lib/workspace";
 
 /**
@@ -25,7 +28,7 @@ import { cleanupWorkspace } from "./lib/workspace";
  *  - awaiting_approval: a human decision gate, valid indefinitely.
  */
 async function reconcileOrphanedDeployments(): Promise<void> {
-	const executionStatuses = ["initializing", "planning", "planned", "applying"];
+	const executionStatuses = ["initializing", "planning", "applying"];
 	const stale = await Deployment.find({ status: { $in: executionStatuses } })
 		.select("_id")
 		.lean();
@@ -88,10 +91,20 @@ const maintenanceWorker = new Worker<MaintenanceJobData>(
 	},
 );
 
+const repoWorker = new Worker<RepoJobData>(
+	REPO_QUEUE,
+	handleRepoDeployJob,
+	{
+		connection,
+		concurrency: 1,
+	},
+);
+
 for (const [name, worker] of [
 	["plan", planWorker],
 	["apply", applyWorker],
 	["maintenance", maintenanceWorker],
+	["repo", repoWorker],
 ] as const) {
 	worker.on("completed", (job) =>
 		console.log(`[worker] ${name} job ${job.id} completed`),
@@ -102,7 +115,7 @@ for (const [name, worker] of [
 }
 
 console.log(
-	`[worker] consuming queues "${INFRA_PLAN_QUEUE}" + "${INFRA_APPLY_QUEUE}"`,
+	`[worker] consuming queues "${INFRA_PLAN_QUEUE}" + "${INFRA_APPLY_QUEUE}" + "${REPO_QUEUE}"`,
 );
 console.log(`[worker] redis:      ${env.REDIS_URL}`);
 console.log(`[worker] aws region: ${env.AWS_REGION}`);
@@ -117,6 +130,9 @@ async function shutdown(signal: string) {
 		planWorker.close(),
 		applyWorker.close(),
 		maintenanceWorker.close(),
+		repoWorker.close(),
+		connection.quit(),
+		closeEventPublisher(),
 	]);
 	process.exit(0);
 }

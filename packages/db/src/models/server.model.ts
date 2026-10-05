@@ -33,6 +33,10 @@ const serverSchema = new Schema(
 		remoteAppDir: { type: String, default: "/srv/cloudman" },
 		/** "disabled" means a deployment was attempted but the host-key check failed. */
 		verifiedAt: { type: Date },
+		/** SHA256 fingerprint of the server host key (TOFU via verify). */
+		knownHostKey: { type: String, default: null },
+		/** Host key algorithm observed during verify (e.g. ssh-ed25519). */
+		hostKeyAlgorithm: { type: String, default: null },
 		createdAt: { type: Date, required: true, default: Date.now },
 		updatedAt: { type: Date, required: true, default: Date.now },
 	},

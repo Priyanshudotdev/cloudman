@@ -95,6 +95,24 @@ function hasNodeServerEntry(
  * Detect which stack a repository is. Order-sensitive by design: the most
  * specific markers (Django manage.py, Spring entrypoint) resolve before more
  * generic ones, and Next's static-vs-node split reads the config file.
+ *
+ * Rule precedence (first match wins, do not reorder — tests encode it):
+ *  1. Manual `options.stack` override short-circuits everything.
+ *  2. Django — any `manage.py` anywhere in the tree.
+ *  3. Flask — any `flask*.py` file OR any Python manifest
+ *     (`requirements.txt`, `Pipfile`, `pipfile.lock`, `pyproject.toml`).
+ *  4. Spring Boot — `pom.xml` or Gradle files (`build.gradle[.kts]`,
+ *     `settings.gradle`).
+ *  5. JS/TS — `package.json` with Next (`next.config.*`) first, then Vite
+ *     (`vite.config.*`), then bare React (dep on `react`), then a Node server
+ *     entry (`main` file or `scripts.start`).
+ *  6. Fallback `unsupported`.
+ *
+ * Known footguns (kept for backwards compat, do not "fix" by reordering):
+ *  - A Spring Boot repo that also contains `requirements.txt` (or any Python
+ *    manifest) classifies as `python-flask`, because rule 3 runs before rule 4.
+ *  - A Next.js repo that also contains a `flask*.py` file classifies as
+ *    `python-flask`, because rule 3 runs before rule 5.
  */
 export async function detectStack(
 	view: RepoFileView,

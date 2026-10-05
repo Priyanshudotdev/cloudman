@@ -33,6 +33,34 @@ describe("buildRecipe", () => {
 		expect(r!.exposedPort).toBe(4000);
 		expect(r!.installCommand).toBe("npm ci --production");
 	});
+
+	it("uses stack override as manual classification", () => {
+		const r = buildRecipe("react-vite", { stack: "next-node" });
+		expect(r!.stack).toBe("next-node");
+		expect(r!.processType).toBe("systemd");
+	});
+
+	it("returns null when stack override is unsupported", () => {
+		expect(buildRecipe("react-vite", { stack: "unsupported" })).toBeNull();
+	});
+
+	it("forces next-node to static when forceStatic is set", () => {
+		const r = buildRecipe("next-node", { forceStatic: true });
+		expect(r).not.toBeNull();
+		expect(r!.processType).toBe("static");
+	});
+
+	it("keeps already-static recipes static when forceStatic is set", () => {
+		const r = buildRecipe("react-vite", { forceStatic: true });
+		expect(r).not.toBeNull();
+		expect(r!.processType).toBe("static");
+	});
+
+	it("returns null when forceStatic is set for server-only stacks", () => {
+		expect(buildRecipe("python-flask", { forceStatic: true })).toBeNull();
+		expect(buildRecipe("node-express", { forceStatic: true })).toBeNull();
+		expect(buildRecipe("springboot", { forceStatic: true })).toBeNull();
+	});
 });
 
 describe("artifactPaths", () => {

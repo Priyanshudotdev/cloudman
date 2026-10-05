@@ -16,11 +16,11 @@ describe("renderRuntime", () => {
 		const m = renderRuntime(recipe, opts);
 		expect(m.processType).toBe("systemd");
 		const unit = m.files[0]!.contents;
-		expect(unit).toContain("Description=my-app");
+		expect(unit).toContain("Description='my-app'");
 		expect(unit).toContain("ExecStart=next start -p 3000");
 		expect(unit).toContain("User=cloudman");
-		expect(unit).toContain("WorkingDirectory=/srv/my-app");
-		expect(m.commands).toContain("systemctl restart my-app.service");
+		expect(unit).toContain("WorkingDirectory='/srv/my-app'");
+		expect(m.commands).toContain("systemctl restart 'my-app.service'");
 	});
 
 	it("substitutes the resolved port into the start command", () => {
@@ -47,7 +47,7 @@ describe("renderRuntime", () => {
 		const recipe = buildRecipe("react-vite")!;
 		const m = renderRuntime(recipe, opts);
 		expect(m.processType).toBe("static");
-		expect(m.files[0]!.contents).toContain("root /srv/my-app");
+		expect(m.files[0]!.contents).toContain("root '/srv/my-app'");
 		expect(m.files[0]!.contents).toContain("try_files $uri $uri/ /index.html;");
 		expect(m.commands.some((c) => c.includes("nginx -t"))).toBe(true);
 	});
@@ -55,5 +55,34 @@ describe("renderRuntime", () => {
 	it("sanitizes unsafe app names in service/file names", async () => {
 		const { sanitizeName } = await import("../runtime");
 		expect(sanitizeName("My App (prod)")).toBe("My_App__prod_");
+	});
+
+	it("falls back to app for dot, dotdot, dash, and empty names", async () => {
+		const { sanitizeName } = await import("../runtime");
+		expect(sanitizeName("..")).toBe("app");
+		expect(sanitizeName(".")).toBe("app");
+		expect(sanitizeName("-")).toBe("app");
+		expect(sanitizeName("")).toBe("app");
+		expect(sanitizeName("...")).toBe("app");
+	});
+
+	it("single-quote escapes runDir and publicHost", () => {
+		const recipe = buildRecipe("react-vite")!;
+		const m = renderRuntime(recipe, {
+			...opts,
+			runDir: "/srv/o'brien",
+			publicHost: "evil'; rm -rf /",
+		});
+		expect(m.files[0]!.contents).toContain("root '/srv/o'\\''brien'");
+		expect(m.files[0]!.contents).toContain("server_name 'evil'\\''; rm -rf /'");
+	});
+
+	it("escapes single quotes and backslashes in pm2 js literals", () => {
+		const recipe = buildRecipe("node-express")!;
+		const m = renderRuntime(recipe, {
+			...opts,
+			runDir: "/srv/a'b\\c",
+		});
+		expect(m.files[0]!.contents).toContain("cwd: '/srv/a\\'b\\\\c'");
 	});
 });

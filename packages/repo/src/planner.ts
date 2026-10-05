@@ -33,16 +33,17 @@ export interface PlanResult {
 export function shapePlan(input: PlanInput): PlanResult {
 	const recipe = buildRecipe(input.stack, input.overrides);
 	if (!recipe) {
+		const effective = input.overrides?.stack ?? input.stack;
 		return {
 			plan: null,
-			error: `Stack "${input.stack}" is unsupported — no build recipe available.`,
+			error: `Stack "${effective}" is unsupported — no build recipe available.`,
 		};
 	}
 	const plan: DeployPlan = {
 		commit: input.commit,
 		branch: input.branch,
 		repoUrl: input.repoUrl,
-		stack: input.stack,
+		stack: recipe.stack,
 		recipe,
 		artifacts: artifactPaths(recipe),
 		url: input.url ?? null,
