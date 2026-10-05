@@ -213,18 +213,37 @@ the local workspace instead.
 
 ## Verification status
 
-- **111 tests across 3 suites**, all green via `bunx turbo run test`:
-  - `packages/core`: 74 unit tests (validation, cycles, topological order, IR
+- **179 tests across 4 suites**, all green via `bunx turbo run test`
+  (requires local MongoDB + Redis — `docker compose up -d`; CI provides them):
+  - `packages/core`: 90 unit tests (validation, cycles, topological order, IR
     defaults, CIDR math, networking wiring rules, compiled HCL assertions,
-    cost estimation & risk analysis, blueprint generation, CloudFormation export)
-  - `apps/api`: 29 e2e tests (auth, compile preview, cost/risk, stack generation,
+    cost estimation & risk analysis, blueprint generation, CloudFormation export,
+    HCL/CFN conformance)
+  - `packages/repo`: 37 unit tests (stack detection, build recipes, runtime
+    rendering incl. shell-escaping, deploy planning)
+  - `apps/api`: 41 e2e tests (auth wall + ownership, kind guards, CAS approve,
+    event persistence, compile preview, cost/risk, stack generation,
     projects + updates, graph versions, AWS connections, full deployment
     lifecycle, guarded deletes/cancel, retry, dashboard analytics, CloudFormation export, route53 records)
-  - `apps/worker`: 8 mock-job tests (plan/apply provisioning, destroy, skips)
-- `bunx turbo run check-types` passes across all 6 packages; Biome clean
+  - `apps/worker`: 11 mock-job tests (plan/apply provisioning, destroy, skips,
+    repo-deploy)
+- `bun run check-types` passes in every workspace that defines it; Biome is
+  enforced non-blocking in CI (`continue-on-error`) until the tree is clean
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
-- Full lifecycle verified end-to-end (mock mode): canvas graph → queued → planned →
-  approved → completed, with persisted audit trail and live SSE events
+- Full lifecycle verified end-to-end (mock mode): canvas graph → queued →
+  planning → awaiting_approval → approved → completed, with persisted audit
+  trail and live SSE events
+- Networking stack verified end-to-end (mock mode): vpc → subnet → security group →
+  instance wiring, CIDR containment rejection, guarded deletes, destroy + workspace cleanup
+- Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
+  cancellation and retry, worker-restart reconciliation, encrypted external IDs
+- Cost tracking verified end-to-end (mock mode): estimated monthly cost stored
+  per deployment, analytics aggregates spend across projects
+- CloudFormation export verified end-to-end (mock mode): all 25 catalog kinds
+  map to valid AWS:: resource types with wired DependsOn / Ref / GetAtt
+- Repo-deploy verified in mock mode (detect → plan → simulated SSH deploy);
+  real SSH deploys need a target host and are exercised manually
+- Real mode verified up to the AWS boundary (graceful failure without credentials)
 - Networking stack verified end-to-end (mock mode): vpc → subnet → security group →
   instance wiring, CIDR containment rejection, guarded deletes, destroy + workspace cleanup
 - Ops hardening verified end-to-end (mock mode): guarded deletes, deployment
@@ -243,6 +262,23 @@ the local workspace instead.
 
 - Real AWS/prod operations (deploys currently run against a mock boundary;
   real-mode connection verification is validated up to the AWS API call)
+- Real SSH repo-deploys against a staging host (mock-covered; needs a
+  documented manual runbook)
+- Biome-clean tree so the CI lint step can become blocking
+
+## Deploying
+
+- **Web → Vercel** (`vercel.json`; linked project `cloudman-web`). Sync env with
+  `bun run env:production` (reads `apps/web/.env`, skips local-only keys).
+- **API + worker → Railway** (`apps/api/railway.json`, `apps/worker/railway.json`).
+  Service settings: Root Directory = repository root,
+  Config File Path = `apps/<service>/railway.json`. Railway has no persistent
+  volumes — keep `CLOUDMAN_REMOTE_STATE=1` (default) and set
+  `CLOUDMAN_TOFU_AUTOINSTALL=1` on the worker for real runs.
+- **Single host → Docker** (`docker-compose.prod.yml`). Copy
+  `.env.production.example` to `.env.production`, fill it in, and
+  `export CLOUDMAN_SECRET=…` (compose interpolation reads the shell/root
+  `.env`, not `.env.production`) — verify with `docker compose config` first.
 
 ## Scripts
 
@@ -250,6 +286,10 @@ the local workspace instead.
 | ------------------- | -------------------------------- |
 | `bun run check`     | Biome lint/format (write mode)   |
 | `bun run check-types` | TypeScript across all packages |
-| `bunx turbo run test` | All test suites (core, api, worker) |
+| `bunx turbo run test` | All test suites (core, repo, api, worker; needs Mongo+Redis) |
 | `bun run dev`       | Everything via turborepo         |
 | `docker compose up -d` | Start MongoDB + Redis         |
+
+> API requests require a session (sign in at `/login`). For frictionless local
+> demos only, set `ALLOW_ANON=1` on the API to serve unauthenticated requests
+> as a shared workspace user — never enable it in production.
