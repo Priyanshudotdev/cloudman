@@ -3,6 +3,17 @@ import { getClient } from "@my-better-t-app/db";
 import { env } from "@my-better-t-app/env/server";
 import { createApp } from "./app";
 
+if (!env.CLOUDMAN_SECRET) {
+	console.warn(
+		"╔══════════════════════════════════════════════════════════════╗\n" +
+			"║  WARNING: CLOUDMAN_SECRET is not set.                       ║\n" +
+			"║  AWS external IDs and SSH credentials will be stored in    ║\n" +
+			"║  PLAINTEXT. Set CLOUDMAN_SECRET to enable AES-256-GCM     ║\n" +
+			"║  encryption at rest.                                      ║\n" +
+			"╚══════════════════════════════════════════════════════════════╝",
+	);
+}
+
 await getClient();
 
 const app = createApp();

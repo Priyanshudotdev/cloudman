@@ -34,6 +34,19 @@ export function createAwsConnectionsRoute(
 		region: z.string().min(1).default("us-east-1"),
 	});
 
+	const updateConnectionSchema = z.object({
+		label: z.string().min(1).max(80).optional(),
+		roleArn: z
+			.string()
+			.regex(
+				ROLE_ARN_PATTERN,
+				"must be an IAM role ARN (arn:aws:iam::<account>:role/<name>)",
+			)
+			.optional(),
+		externalId: z.string().min(8).max(128).optional(),
+		region: z.string().min(1).optional(),
+	});
+
 	awsConnectionsRoute.get("/", async (c) => {
 		const connections = await AwsConnection.find({ userId: c.get("userId") })
 			.select("-externalId")
@@ -50,6 +63,11 @@ export function createAwsConnectionsRoute(
 				400,
 			);
 		}
+		if (!env.CLOUDMAN_SECRET) {
+			console.warn(
+				"[api] CLOUDMAN_SECRET unset — storing AWS external ID in PLAINTEXT",
+			);
+		}
 		const connection = await AwsConnection.create({
 			...parsed.data,
 			externalId: env.CLOUDMAN_SECRET
@@ -59,6 +77,48 @@ export function createAwsConnectionsRoute(
 		});
 		const { externalId: _hidden, ...safe } = connection.toObject();
 		return c.json({ connection: safe }, 201);
+	});
+
+	awsConnectionsRoute.put("/:id", async (c) => {
+		const id = c.req.param("id");
+		if (!/^[a-f\d]{24}$/i.test(id)) return c.json({ error: "Not found" }, 404);
+		const parsed = updateConnectionSchema.safeParse(await c.req.json());
+		if (!parsed.success) {
+			return c.json(
+				{ error: "Invalid request", issues: parsed.error.issues },
+				400,
+			);
+		}
+		if (
+			parsed.data.label === undefined &&
+			parsed.data.roleArn === undefined &&
+			parsed.data.externalId === undefined &&
+			parsed.data.region === undefined
+		) {
+			return c.json({ error: "Nothing to update" }, 400);
+		}
+		const patch: Record<string, unknown> = { updatedAt: new Date() };
+		if (parsed.data.label !== undefined) patch.label = parsed.data.label;
+		if (parsed.data.roleArn !== undefined) patch.roleArn = parsed.data.roleArn;
+		if (parsed.data.region !== undefined) patch.region = parsed.data.region;
+		if (parsed.data.externalId !== undefined) {
+			if (!env.CLOUDMAN_SECRET) {
+				console.warn(
+					"[api] CLOUDMAN_SECRET unset — storing AWS external ID in PLAINTEXT",
+				);
+			}
+			patch.externalId = env.CLOUDMAN_SECRET
+				? encryptSecret(parsed.data.externalId, env.CLOUDMAN_SECRET)
+				: parsed.data.externalId;
+		}
+		const updated = await AwsConnection.findOneAndUpdate(
+			{ _id: id, userId: c.get("userId") },
+			{ $set: patch },
+			{ returnDocument: "after", runValidators: true },
+		).lean();
+		if (!updated) return c.json({ error: "Not found" }, 404);
+		const { externalId: _hidden, ...safe } = updated;
+		return c.json({ connection: safe });
 	});
 
 	awsConnectionsRoute.delete("/:id", async (c) => {

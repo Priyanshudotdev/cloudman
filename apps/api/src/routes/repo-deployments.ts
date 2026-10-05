@@ -1,7 +1,8 @@
 import { Deployment, Project } from "@my-better-t-app/db";
-import { getRepoQueue, publishDeploymentEvent } from "@my-better-t-app/queue";
+import { getRepoQueue } from "@my-better-t-app/queue";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { recordApiDeploymentEvent } from "../lib/deployment-events";
 import { type AppEnv, requireAuth } from "../lib/session";
 
 const createRepoSchema = z.object({
@@ -35,7 +36,7 @@ export function createRepoDeploymentsRoute(
 		const userId = c.get("userId");
 		if (!/^[a-f\d]{24}$/i.test(id)) return null;
 		const deployment = await Deployment.findById(id).lean();
-		if (!deployment || deployment.kind !== "repo") return null;
+		if (!deployment) return null;
 		const project = await Project.findById(deployment.projectId).lean();
 		if (!project || String(project.ownerUserId) !== userId) return null;
 		return deployment;
@@ -51,6 +52,7 @@ export function createRepoDeploymentsRoute(
 			kind: "repo",
 			projectId: { $in: projectIds },
 		})
+			.select("-events")
 			.sort({ createdAt: -1 })
 			.limit(100)
 			.lean();
@@ -97,15 +99,14 @@ export function createRepoDeploymentsRoute(
 			repoUrl,
 			repoBranch,
 			commitSha: parsed.data.commitSha,
-			events: [
-				{
-					level: "info",
-					message: `Queued repo deploy for ${repoBranch}@${safeHost(repoUrl)}`,
-					at: now,
-				},
-			],
 			createdAt: now,
 			updatedAt: now,
+		});
+
+		await recordApiDeploymentEvent(String(deployment._id), {
+			level: "info",
+			message: `Queued repo deploy for ${repoBranch}@${safeHost(repoUrl)}`,
+			status: "queued",
 		});
 
 		await getRepoQueue().add(
@@ -114,7 +115,8 @@ export function createRepoDeploymentsRoute(
 			{ jobId: String(deployment._id) },
 		);
 
-		return c.json({ deployment }, 201);
+		const withEvents = await Deployment.findById(deployment._id).lean();
+		return c.json({ deployment: withEvents ?? deployment }, 201);
 	});
 
 	const RETRYABLE_STATUSES = ["failed", "canceled"] as const;
@@ -122,6 +124,12 @@ export function createRepoDeploymentsRoute(
 	repoRoute.post("/:id/retry", async (c) => {
 		const deployment = await loadOwnedRepoSchema(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
+		if (deployment.kind !== "repo") {
+			return c.json(
+				{ error: "Deployment is not a repo deployment" },
+				409,
+			);
+		}
 		const status = deployment.status as string;
 		if (
 			!RETRYABLE_STATUSES.includes(
@@ -134,30 +142,54 @@ export function createRepoDeploymentsRoute(
 			);
 		}
 		const now = new Date();
-		await Deployment.updateOne(
-			{ _id: deployment._id },
+		const result = await Deployment.updateOne(
+			{
+				_id: deployment._id,
+				status: { $in: [...RETRYABLE_STATUSES] },
+			},
 			{ $set: { status: "queued", error: undefined, updatedAt: now } },
 		);
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		if (result.modifiedCount === 0) {
+			return c.json({ error: "Deployment is no longer retryable." }, 409);
+		}
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "info",
 			message: "Deployment retry requested",
 			status: "queued",
-			at: now.toISOString(),
 		});
-		await getRepoQueue().add(
-			"repo-deploy",
-			{ deploymentId: String(deployment._id) },
-			{ jobId: String(deployment._id) },
-		);
+		try {
+			const queue = getRepoQueue();
+			const old = await queue.getJob(String(deployment._id));
+			if (old) await old.remove();
+			await queue.add(
+				"repo-deploy",
+				{ deploymentId: String(deployment._id) },
+				{ jobId: String(deployment._id) },
+			);
+		} catch (error) {
+			console.error("[api] repo retry: failed to requeue repo job:", error);
+			return c.json({ error: "Failed to requeue deployment job" }, 500);
+		}
 		return c.json({ ok: true, status: "queued" });
 	});
+
+	const CANCELLABLE_STATUSES = ["queued", "initializing", "planning"] as const;
 
 	repoRoute.post("/:id/cancel", async (c) => {
 		const deployment = await loadOwnedRepoSchema(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
+		if (deployment.kind !== "repo") {
+			return c.json(
+				{ error: "Deployment is not a repo deployment" },
+				409,
+			);
+		}
 		const status = deployment.status as string;
-		if (!["queued", "initializing", "planning", "planned"].includes(status)) {
+		if (
+			!CANCELLABLE_STATUSES.includes(
+				status as (typeof CANCELLABLE_STATUSES)[number],
+			)
+		) {
 			return c.json(
 				{
 					error:
@@ -169,8 +201,11 @@ export function createRepoDeploymentsRoute(
 			);
 		}
 		const now = new Date();
-		await Deployment.updateOne(
-			{ _id: deployment._id },
+		const result = await Deployment.updateOne(
+			{
+				_id: deployment._id,
+				status: { $in: [...CANCELLABLE_STATUSES] },
+			},
 			{
 				$set: {
 					status: "canceled",
@@ -179,6 +214,12 @@ export function createRepoDeploymentsRoute(
 				},
 			},
 		);
+		if (result.modifiedCount === 0) {
+			return c.json(
+				{ error: "Deployment is no longer cancellable." },
+				409,
+			);
+		}
 		try {
 			const job = await getRepoQueue()
 				.getJob(String(deployment._id))
@@ -187,12 +228,10 @@ export function createRepoDeploymentsRoute(
 		} catch {
 			// nothing to remove — job already picked up
 		}
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "error",
 			message: "Deployment canceled by user",
 			status: "canceled",
-			at: now.toISOString(),
 		});
 		return c.json({ ok: true, status: "canceled" });
 	});

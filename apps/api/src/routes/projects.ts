@@ -15,10 +15,11 @@ import {
 import {
 	getMaintenanceQueue,
 	getPlanQueue,
-	publishDeploymentEvent,
 } from "@my-better-t-app/queue";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { recordApiDeploymentEvent } from "../lib/deployment-events";
 import { type AppEnv, requireAuth } from "../lib/session";
 
 export function createProjectsRoute(
@@ -124,6 +125,8 @@ export function createProjectsRoute(
 				);
 			} catch (error) {
 				console.error("[api] failed to seed blueprint graph:", error);
+				await Project.findByIdAndDelete(project._id).catch(() => {});
+				return c.json({ error: "Failed to seed blueprint graph" }, 500);
 			}
 		}
 
@@ -242,7 +245,6 @@ export function createProjectsRoute(
 			"queued",
 			"initializing",
 			"planning",
-			"planned",
 			"apply_queued",
 			"applying",
 		] as const;
@@ -310,7 +312,10 @@ export function createProjectsRoute(
 		graph: z.record(z.string(), z.unknown()),
 	});
 
-	projectsRoute.put("/:id/graph", async (c) => {
+	projectsRoute.put(
+		"/:id/graph",
+		bodyLimit({ maxSize: 512 * 1024 }),
+		async (c) => {
 		const id = c.req.param("id");
 		const project = await loadOwnedProject(c, id);
 		if (!project) return c.json({ error: "Not found" }, 404);
@@ -333,19 +338,28 @@ export function createProjectsRoute(
 		}
 
 		const version = project.latestGraphVersion + 1;
-		const graphVersion = await GraphVersion.create({
-			projectId: id,
-			version,
-			graph: parsed.data.graph,
-			createdByUserId: c.get("userId"),
-		});
+		let graphVersion;
+		try {
+			graphVersion = await GraphVersion.create({
+				projectId: id,
+				version,
+				graph: parsed.data.graph,
+				createdByUserId: c.get("userId"),
+			});
+		} catch (error) {
+			if ((error as { code?: number }).code === 11000) {
+				return c.json({ error: "Version conflict, retry save" }, 409);
+			}
+			throw error;
+		}
 		await Project.updateOne(
 			{ _id: id },
 			{ latestGraphVersion: version, updatedAt: new Date() },
 		);
 
 		return c.json({ graphVersionId: graphVersion._id, version }, 201);
-	});
+		},
+	);
 
 	projectsRoute.get("/:id/graph/latest", async (c) => {
 		const id = c.req.param("id");
@@ -398,7 +412,7 @@ export function createProjectsRoute(
 	/**
 	 * Creates a deployment record and enqueues the infra-plan job.
 	 * Status lifecycle:
-	 *   queued → initializing → planning → planned → awaiting_approval
+	 *   queued → initializing → planning → awaiting_approval
 	 *   → apply_queued → applying → completed | failed
 	 *
 	 * Destroy deployments intentionally pin the graph version of the last
@@ -472,15 +486,13 @@ export function createProjectsRoute(
 			startedAt: now,
 		});
 
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: parsed.data.action === "destroy" ? "error" : "info",
 			message:
 				parsed.data.action === "destroy"
 					? `Destruction requested for project "${project.name}"`
 					: `Deployment queued for project "${project.name}"`,
 			status: "queued",
-			at: now.toISOString(),
 		});
 
 		await getPlanQueue().add(

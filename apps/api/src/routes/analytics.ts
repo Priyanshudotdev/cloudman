@@ -15,8 +15,12 @@ export function createAnalyticsRoute(
 
 		const projects = await Project.find({ ownerUserId: userId }).select("_id");
 		const projectIds = projects.map((project) => project._id);
+		// Bounded read: cap analytics input to 500 deployments and exclude the
+		// heavy events array (aggregation only needs status/cost summaries).
 		const deployments = projectIds.length
 			? await Deployment.find({ projectId: { $in: projectIds } })
+					.select("-events")
+					.limit(500)
 			: [];
 
 		let completed = 0;

@@ -1,11 +1,13 @@
 import {
 	buildIR,
 	generateGraphFromPrompt,
+	listResourceDefinitions,
 	MAX_PROMPT_LENGTH,
 } from "@my-better-t-app/core";
 import { env } from "@my-better-t-app/env/server";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { createRateLimiter } from "../lib/rate-limit";
 import { type AppEnv, requireAuth } from "../lib/session";
 
 const generateSchema = z.object({
@@ -15,6 +17,15 @@ const generateSchema = z.object({
 interface LlmGraphResponse {
 	graph: Record<string, unknown>;
 }
+
+/** Node types advertised to the LLM, derived from the core registry. */
+const RESOURCE_TYPE_LIST = listResourceDefinitions()
+	.map((def) => def.type)
+	.join(", ");
+
+const SYSTEM_PROMPT =
+	'You design AWS infrastructure as CloudMan graphs. Respond with JSON only: {"graph": {version:1, name, nodes:[{id,type,config}], edges:[{source,target}]}}. ' +
+	`Node types can be ${RESOURCE_TYPE_LIST}. Edges point consumer → dependency.`;
 
 async function generateWithLlm(prompt: string): Promise<{
 	result?: { graph: Record<string, unknown> };
@@ -37,11 +48,10 @@ async function generateWithLlm(prompt: string): Promise<{
 					temperature: 0.2,
 					response_format: { type: "json_object" },
 					messages: [
-						{
-							role: "system",
-							content:
-								'You design AWS infrastructure as CloudMan graphs. Respond with JSON only: {"graph": {version:1, name, nodes:[{id,type,config}], edges:[{source,target}]}}. Node types can be aws_vpc, aws_subnet, aws_security_group, aws_ec2, aws_s3, aws_dynamodb_table, aws_rds, aws_internet_gateway, aws_nat_gateway, aws_alb, aws_ecr, aws_lambda, aws_ecs, aws_ebs, aws_efs, aws_aurora, aws_elasticache, aws_iam_role, aws_iam_policy, aws_sqs, aws_sns, aws_route53_zone, aws_route53_record, aws_cloudwatch_log_group, aws_apigateway. Edges point consumer → dependency.',
-						},
+					{
+						role: "system",
+						content: SYSTEM_PROMPT,
+					},
 						{ role: "user", content: prompt },
 					],
 				}),
@@ -70,11 +80,13 @@ export function createGenerateRoute(
 
 	generateRoute.use("*", auth);
 
+	const generateLimiter = createRateLimiter({ windowMs: 60_000, max: 10 });
+
 	/**
 	 * Natural-language stack generation. Uses deterministic blueprint templates
 	 * by default; optionally routes through OpenRouter when configured.
 	 */
-	generateRoute.post("/", async (c) => {
+	generateRoute.post("/", generateLimiter, async (c) => {
 		const parsed = generateSchema.safeParse(await c.req.json());
 		if (!parsed.success) {
 			return c.json(

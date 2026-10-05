@@ -6,7 +6,9 @@ import {
 	exportCloudFormation,
 } from "@my-better-t-app/core";
 import { Hono, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
+import { createRateLimiter } from "../lib/rate-limit";
 import { type AppEnv, requireAuth } from "../lib/session";
 
 export function createCompileRoute(
@@ -22,11 +24,17 @@ export function createCompileRoute(
 		bucketNameSuffix: z.string().min(3).max(20).optional(),
 	});
 
+	const compileLimiter = createRateLimiter({ windowMs: 60_000, max: 30 });
+
 	/**
 	 * Stateless preview: graph → IR → generated OpenTofu files.
 	 * Nothing is persisted; used by the plan/config UI before saving or deploying.
 	 */
-	compileRoute.post("/", async (c) => {
+	compileRoute.post(
+		"/",
+		bodyLimit({ maxSize: 512 * 1024 }),
+		compileLimiter,
+		async (c) => {
 		const parsed = compileSchema.safeParse(await c.req.json());
 		if (!parsed.success) {
 			return c.json(
@@ -62,6 +70,7 @@ export function createCompileRoute(
 			cost,
 			risks,
 		});
-	});
+		},
+	);
 	return compileRoute;
 }

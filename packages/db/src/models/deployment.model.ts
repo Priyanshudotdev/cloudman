@@ -7,7 +7,6 @@ export const DEPLOYMENT_STATUSES = [
 	"queued",
 	"initializing",
 	"planning",
-	"planned",
 	"awaiting_approval",
 	"apply_queued",
 	"applying",

@@ -2,11 +2,11 @@ import { Deployment, Project } from "@my-better-t-app/db";
 import {
 	getApplyQueue,
 	getPlanQueue,
-	publishDeploymentEvent,
 	subscribeDeploymentEvents,
 } from "@my-better-t-app/queue";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { streamSSE } from "hono/streaming";
+import { recordApiDeploymentEvent } from "../lib/deployment-events";
 import { type AppEnv, requireAuth } from "../lib/session";
 
 export function createDeploymentsRoute(
@@ -79,6 +79,12 @@ export function createDeploymentsRoute(
 	deploymentsRoute.post("/:id/approve", async (c) => {
 		const deployment = await loadOwnedDeployment(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
+		if (deployment.kind !== "infra") {
+			return c.json(
+				{ error: "Deployment is not an infrastructure deployment" },
+				409,
+			);
+		}
 		if (deployment.status !== "awaiting_approval") {
 			return c.json(
 				{ error: `Cannot approve deployment in status "${deployment.status}"` },
@@ -87,16 +93,20 @@ export function createDeploymentsRoute(
 		}
 
 		const now = new Date();
-		await Deployment.updateOne(
-			{ _id: deployment._id },
-			{ status: "apply_queued", updatedAt: now },
+		const result = await Deployment.updateOne(
+			{ _id: deployment._id, status: "awaiting_approval" },
+			{ $set: { status: "apply_queued", updatedAt: now } },
 		);
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		if (result.modifiedCount === 0) {
+			return c.json(
+				{ error: "Deployment is no longer awaiting approval." },
+				409,
+			);
+		}
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "success",
 			message: "Plan approved by user — queued for apply",
 			status: "apply_queued",
-			at: now.toISOString(),
 		});
 
 		await getApplyQueue().add(
@@ -112,13 +122,18 @@ export function createDeploymentsRoute(
 		"queued",
 		"initializing",
 		"planning",
-		"planned",
 		"awaiting_approval",
 	] as const;
 
 	deploymentsRoute.post("/:id/cancel", async (c) => {
 		const deployment = await loadOwnedDeployment(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
+		if (deployment.kind !== "infra") {
+			return c.json(
+				{ error: "Deployment is not an infrastructure deployment" },
+				409,
+			);
+		}
 
 		const status = deployment.status as string;
 		if (
@@ -138,10 +153,19 @@ export function createDeploymentsRoute(
 		}
 
 		const now = new Date();
-		await Deployment.updateOne(
-			{ _id: deployment._id },
+		const result = await Deployment.updateOne(
+			{
+				_id: deployment._id,
+				status: { $in: [...CANCELLABLE_STATUSES] },
+			},
 			{ $set: { status: "canceled", completedAt: now, updatedAt: now } },
 		);
+		if (result.modifiedCount === 0) {
+			return c.json(
+				{ error: "Deployment is no longer cancellable." },
+				409,
+			);
+		}
 		try {
 			const removed = await getPlanQueue().remove(String(deployment._id));
 			if (!removed) {
@@ -152,12 +176,10 @@ export function createDeploymentsRoute(
 		} catch (error) {
 			console.error("[api] cancel: failed to remove queued plan job:", error);
 		}
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "error",
 			message: "Deployment canceled by user",
 			status: "canceled",
-			at: now.toISOString(),
 		});
 
 		return c.json({ ok: true, status: "canceled" });
@@ -168,6 +190,12 @@ export function createDeploymentsRoute(
 	deploymentsRoute.post("/:id/retry", async (c) => {
 		const deployment = await loadOwnedDeployment(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
+		if (deployment.kind !== "infra") {
+			return c.json(
+				{ error: "Deployment is not an infrastructure deployment" },
+				409,
+			);
+		}
 
 		const status = deployment.status as string;
 		if (
@@ -184,23 +212,38 @@ export function createDeploymentsRoute(
 		}
 
 		const now = new Date();
-		await Deployment.updateOne(
-			{ _id: deployment._id },
+		const result = await Deployment.updateOne(
+			{
+				_id: deployment._id,
+				status: { $in: [...RETRYABLE_STATUSES] },
+			},
 			{ $set: { status: "queued", updatedAt: now } },
 		);
-		await publishDeploymentEvent({
-			deploymentId: String(deployment._id),
+		if (result.modifiedCount === 0) {
+			return c.json(
+				{ error: "Deployment is no longer retryable." },
+				409,
+			);
+		}
+		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "info",
 			message: "Deployment retry requested",
 			status: "queued",
-			at: now.toISOString(),
 		});
 
-		await getPlanQueue().add(
-			"plan",
-			{ deploymentId: String(deployment._id) },
-			{ jobId: String(deployment._id) },
-		);
+		try {
+			const queue = getPlanQueue();
+			const old = await queue.getJob(String(deployment._id));
+			if (old) await old.remove();
+			await queue.add(
+				"plan",
+				{ deploymentId: String(deployment._id) },
+				{ jobId: String(deployment._id) },
+			);
+		} catch (error) {
+			console.error("[api] retry: failed to requeue plan job:", error);
+			return c.json({ error: "Failed to requeue deployment job" }, 500);
+		}
 
 		return c.json({ ok: true, status: "queued" });
 	});
