@@ -1,14 +1,12 @@
 import { z } from "zod";
 
+import { isValidIpv4Cidr } from "../../graph/cidr";
 import { defineResource } from "../types";
 
 export const vpcConfigSchema = z.strictObject({
 	cidrBlock: z
 		.string()
-		.regex(
-			/^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/,
-			"must be an IPv4 CIDR block (e.g. 10.0.0.0/16)",
-		)
+		.refine(isValidIpv4Cidr, "must be an IPv4 CIDR block (e.g. 10.0.0.0/16)")
 		.default("10.0.0.0/16"),
 	enableDnsHostnames: z.boolean().default(true),
 });

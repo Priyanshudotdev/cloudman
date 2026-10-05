@@ -308,6 +308,21 @@ describe("analyzeRisks", () => {
 		expect(codes).toContain("NAT_COST_HOTSPOT");
 	});
 
+	test("flags SQS queues with a long visibility timeout", () => {
+		const { document } = build([
+			{ id: "q", type: "aws_sqs", config: { visibilityTimeoutSec: 600 } },
+		]);
+		const risks = analyzeRisks(document);
+		expect(
+			risks.some(
+				(r) =>
+					r.code === "SQS_LONG_VISIBILITY" &&
+					r.irId === "q" &&
+					r.severity === "low",
+			),
+		).toBe(true);
+	});
+
 	test("does not nag when hardening flags are satisfied", () => {
 		const { document } = build(
 			[

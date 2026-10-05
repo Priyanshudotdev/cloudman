@@ -75,12 +75,37 @@ function idList(value: unknown): string[] {
 		: [];
 }
 
-function ref(id: string): Record<string, unknown> {
-	return { Ref: cfnLogicalIds.get(id) ?? id };
+function ref(irId: string): Record<string, unknown> {
+	const logical = cfnLogicalIds.get(irId);
+	if (!logical)
+		throw new Error(
+			`no CloudFormation logical id for referenced node "${irId}"`,
+		);
+	return { Ref: logical };
 }
 
-function getAtt(id: string, attribute: string): Record<string, unknown> {
-	return { "Fn::GetAtt": [cfnLogicalIds.get(id) ?? id, attribute] };
+function getAtt(irId: string, attribute: string): Record<string, unknown> {
+	const logical = cfnLogicalIds.get(irId);
+	if (!logical)
+		throw new Error(
+			`no CloudFormation logical id for referenced node "${irId}"`,
+		);
+	return { "Fn::GetAtt": [logical, attribute] };
+}
+
+/**
+ * References to synthesized sibling resources (subnet groups, listeners,
+ * deployments) whose ids are logical ids, not IR node ids — no lookup needed.
+ */
+function refLogical(logicalId: string): Record<string, unknown> {
+	return { Ref: logicalId };
+}
+
+function getAttLogical(
+	logicalId: string,
+	attribute: string,
+): Record<string, unknown> {
+	return { "Fn::GetAtt": [logicalId, attribute] };
 }
 
 let cfnLogicalIds = new Map<string, string>();
@@ -240,7 +265,7 @@ function writeDynamoDb(resource: IRResource): ExportBlock[] {
 		KeySchema: keySchema,
 		AttributeDefinitions: definitions,
 		BillingMode:
-			str(attributes.billing_mode) === "provisioned"
+			str(attributes.billing_mode) === "PROVISIONED"
 				? "PROVISIONED"
 				: "PAY_PER_REQUEST",
 	};
@@ -274,7 +299,7 @@ function writeInternetGateway(resource: IRResource): ExportBlock[] {
 				Type: "AWS::EC2::VPCGatewayAttachment",
 				Properties: {
 					VpcId: ref(String(resource.attributes.vpc_ref ?? "")),
-					InternetGatewayId: ref(id),
+					InternetGatewayId: refLogical(id),
 				},
 			},
 		},
@@ -290,7 +315,7 @@ function writeNatGateway(resource: IRResource): ExportBlock[] {
 				Type: "AWS::EC2::NatGateway",
 				Properties: {
 					SubnetId: ref(String(resource.attributes.subnet_ref ?? "")),
-					AllocationId: ref(`${id}EIP`),
+					AllocationId: refLogical(`${id}EIP`),
 					Tags: nameTag(resource),
 				},
 			},
@@ -350,11 +375,11 @@ function writeAlb(resource: IRResource): ExportBlock[] {
 			block: {
 				Type: "AWS::ElasticLoadBalancingV2::Listener",
 				Properties: {
-					LoadBalancerArn: getAtt(id, "Arn"),
+					LoadBalancerArn: getAttLogical(id, "Arn"),
 					Port: num(attributes.listener_port),
 					Protocol: str(attributes.listener_protocol) ?? "HTTP",
 					DefaultActions: [
-						{ Type: "forward", TargetGroupArn: ref(targetGroupId) },
+						{ Type: "forward", TargetGroupArn: refLogical(targetGroupId) },
 					],
 				},
 			},
@@ -374,7 +399,7 @@ function writeEcr(resource: IRResource): ExportBlock[] {
 						ScanOnPush: bool(resource.attributes.scan_on_push),
 					},
 					ImageTagMutability:
-						str(resource.attributes.image_tag_mutability) === "immutable"
+						str(resource.attributes.image_tag_mutability) === "IMMUTABLE"
 							? "IMMUTABLE"
 							: "MUTABLE",
 					Tags: nameTag(resource),
@@ -406,7 +431,9 @@ function writeLambda(resource: IRResource): ExportBlock[] {
 		const repo = idList(attributes.repository_refs)[0];
 		if (repo) {
 			properties.Code = {
-				ImageUri: { "Fn::Join": ["", [getAtt(repo, "Arn"), ":latest"]] },
+				ImageUri: {
+					"Fn::Join": ["", [getAtt(repo, "RepositoryUrl"), ":latest"]],
+				},
 			};
 		} else {
 			properties.Code = { ZipFile: "exports.handler = async () => ({});" };
@@ -439,7 +466,10 @@ function writeEcs(resource: IRResource): ExportBlock[] {
 			return {
 				"Fn::Join": [
 					"",
-					[getAtt(repo, "Arn"), `:${str(attributes.image_tag) ?? "latest"}`],
+					[
+						getAtt(repo, "RepositoryUrl"),
+						`:${str(attributes.image_tag) ?? "latest"}`,
+					],
 				],
 			};
 		})();
@@ -478,8 +508,8 @@ function writeEcs(resource: IRResource): ExportBlock[] {
 	const service: Record<string, unknown> = {
 		Type: "AWS::ECS::Service",
 		Properties: {
-			Cluster: ref(id),
-			TaskDefinition: ref(`${id}TaskDefinition`),
+			Cluster: refLogical(id),
+			TaskDefinition: refLogical(`${id}TaskDefinition`),
 			DesiredCount: num(attributes.desired_count) ?? 1,
 			LaunchType: "FARGATE",
 		},
@@ -543,7 +573,7 @@ function writeEbs(resource: IRResource): ExportBlock[] {
 					InstanceId: instanceRef
 						? getAtt(instanceRef, "InstanceId")
 						: undefined,
-					VolumeId: ref(id),
+					VolumeId: refLogical(id),
 					Device: str(attributes.device) ?? "/dev/sdf",
 				},
 			},
@@ -552,9 +582,10 @@ function writeEbs(resource: IRResource): ExportBlock[] {
 }
 
 function writeEfs(resource: IRResource): ExportBlock[] {
-	return [
+	const id = logicalId(resource);
+	const blocks: ExportBlock[] = [
 		{
-			id: logicalId(resource),
+			id,
 			block: {
 				Type: "AWS::EFS::FileSystem",
 				Properties: {
@@ -568,6 +599,21 @@ function writeEfs(resource: IRResource): ExportBlock[] {
 			},
 		},
 	];
+	const subnets = idList(resource.attributes.subnet_refs);
+	const sgRefs = idList(resource.attributes.security_group_refs);
+	subnets.forEach((subnet, index) => {
+		const mountTarget: Record<string, unknown> = {
+			FileSystemId: refLogical(id),
+			SubnetId: ref(subnet),
+		};
+		if (sgRefs.length > 0)
+			mountTarget.SecurityGroups = sgRefs.map((sg) => getAtt(sg, "GroupId"));
+		blocks.push({
+			id: `${id}MountTarget${index + 1}`,
+			block: { Type: "AWS::EFS::MountTarget", Properties: mountTarget },
+		});
+	});
+	return blocks;
 }
 
 function writeRds(resource: IRResource): ExportBlock[] {
@@ -587,7 +633,7 @@ function writeRds(resource: IRResource): ExportBlock[] {
 	const subnets = idList(attributes.subnet_refs);
 	const sgRefs = idList(attributes.security_group_refs);
 	if (subnets.length > 0)
-		properties.DBSubnetGroupName = ref(`${id}SubnetGroup`);
+		properties.DBSubnetGroupName = refLogical(`${id}SubnetGroup`);
 	if (sgRefs.length > 0)
 		properties.VPCSecurityGroups = sgRefs.map((sg) => getAtt(sg, "GroupId"));
 
@@ -621,11 +667,11 @@ function writeAurora(resource: IRResource): ExportBlock[] {
 	const subnets = idList(attributes.subnet_refs);
 	const sgRefs = idList(attributes.security_group_refs);
 	if (subnets.length > 0)
-		properties.DBSubnetGroupName = ref(`${id}SubnetGroup`);
+		properties.DBSubnetGroupName = refLogical(`${id}SubnetGroup`);
 	if (sgRefs.length > 0)
 		properties.VpcSecurityGroupIds = sgRefs.map((sg) => getAtt(sg, "GroupId"));
 
-	return [
+	const blocks: ExportBlock[] = [
 		{ id, block: { Type: "AWS::RDS::DBCluster", Properties: properties } },
 		{
 			id: `${id}SubnetGroup`,
@@ -637,7 +683,19 @@ function writeAurora(resource: IRResource): ExportBlock[] {
 				},
 			},
 		},
+		{
+			id: `${id}Instance`,
+			block: {
+				Type: "AWS::RDS::DBInstance",
+				Properties: {
+					DBClusterIdentifier: refLogical(id),
+					DBInstanceClass: str(attributes.instance_class) ?? "db.r6g.large",
+					Engine: str(attributes.engine) ?? "aurora-postgresql",
+				},
+			},
+		},
 	];
+	return blocks;
 }
 
 function writeElasticache(resource: IRResource): ExportBlock[] {
@@ -654,7 +712,7 @@ function writeElasticache(resource: IRResource): ExportBlock[] {
 	const subnets = idList(attributes.subnet_refs);
 	const sgRefs = idList(attributes.security_group_refs);
 	if (subnets.length > 0)
-		properties.CacheSubnetGroupName = ref(`${id}SubnetGroup`);
+		properties.CacheSubnetGroupName = refLogical(`${id}SubnetGroup`);
 	if (sgRefs.length > 0)
 		properties.VpcSecurityGroupIds = sgRefs.map((sg) => getAtt(sg, "GroupId"));
 	const parameterGroup = str(attributes.parameter_group_name);
@@ -738,7 +796,7 @@ function writeSqs(resource: IRResource): ExportBlock[] {
 		DelaySeconds: num(attributes.delay_seconds) ?? 0,
 	};
 	if (bool(attributes.fifo_queue)) {
-		properties.FifoQueue = "true";
+		properties.FifoQueue = true;
 		properties.QueueName = `${resource.name}.fifo`;
 	}
 	return [
@@ -827,15 +885,43 @@ function writeLogGroup(resource: IRResource): ExportBlock[] {
 function writeApiGateway(resource: IRResource): ExportBlock[] {
 	const id = logicalId(resource);
 	const attributes = resource.attributes;
+	const apiResourceId = `${id}Resource`;
 	const methodId = `${id}Method`;
+	const permissionId = `${id}Permission`;
 	const deploymentId = `${id}Deployment`;
 	const stageId = `${id}Stage`;
+
+	const routePath = str(attributes.route_path) ?? "{proxy+}";
+
+	const blocks: ExportBlock[] = [
+		{
+			id,
+			block: {
+				Type: "AWS::ApiGateway::RestApi",
+				Properties: {
+					Name: `api-${resource.name}`,
+					EndpointConfiguration: { Types: ["REGIONAL"] },
+				},
+			},
+		},
+		{
+			id: apiResourceId,
+			block: {
+				Type: "AWS::ApiGateway::Resource",
+				Properties: {
+					RestApiId: refLogical(id),
+					ParentId: getAttLogical(id, "RootResourceId"),
+					PathPart: routePath,
+				},
+			},
+		},
+	];
 
 	const method: Record<string, unknown> = {
 		Type: "AWS::ApiGateway::Method",
 		Properties: {
-			RestApiId: ref(id),
-			ResourceId: getAtt(id, "RootResourceId"),
+			RestApiId: refLogical(id),
+			ResourceId: refLogical(apiResourceId),
 			HttpMethod: str(attributes.http_method) ?? "GET",
 			AuthorizationType: "NONE",
 		},
@@ -859,24 +945,42 @@ function writeApiGateway(resource: IRResource): ExportBlock[] {
 			},
 		};
 	}
+	blocks.push({ id: methodId, block: method });
 
-	return [
-		{
-			id,
+	if (lambdaRefs.length > 0) {
+		blocks.push({
+			id: permissionId,
 			block: {
-				Type: "AWS::ApiGateway::RestApi",
+				Type: "AWS::Lambda::Permission",
 				Properties: {
-					Name: `api-${resource.name}`,
-					EndpointConfiguration: { Types: ["REGIONAL"] },
+					Action: "lambda:InvokeFunction",
+					FunctionName: getAtt(lambdaRefs[0] ?? "", "Arn"),
+					Principal: "apigateway.amazonaws.com",
+					SourceArn: {
+						"Fn::Join": [
+							"",
+							[
+								"arn:aws:execute-api:",
+								{ Ref: "AWS::Region" },
+								":",
+								{ Ref: "AWS::AccountId" },
+								":",
+								refLogical(id),
+								"/*",
+							],
+						],
+					},
 				},
 			},
-		},
-		{ id: methodId, block: method },
+		});
+	}
+
+	blocks.push(
 		{
 			id: deploymentId,
 			block: {
 				Type: "AWS::ApiGateway::Deployment",
-				Properties: { RestApiId: ref(id) },
+				Properties: { RestApiId: refLogical(id) },
 				DependsOn: [methodId],
 			},
 		},
@@ -886,13 +990,14 @@ function writeApiGateway(resource: IRResource): ExportBlock[] {
 				Type: "AWS::ApiGateway::Stage",
 				Properties: {
 					StageName: str(attributes.stage_name) ?? "v1",
-					RestApiId: ref(id),
-					DeploymentId: ref(deploymentId),
+					RestApiId: refLogical(id),
+					DeploymentId: refLogical(deploymentId),
 				},
 				DependsOn: [deploymentId],
 			},
 		},
-	];
+	);
+	return blocks;
 }
 
 function resourceBlocks(resource: IRResource): ExportBlock[] {

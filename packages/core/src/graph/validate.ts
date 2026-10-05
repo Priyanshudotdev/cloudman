@@ -445,10 +445,15 @@ function validateNetworking(
 			const config = configOf(nodeId) ?? {};
 			const hasAlias = hasEdge(nodeId, "aws_alb");
 			const recordType = stringValue(config, "recordType") || "A";
-			if (hasAlias && recordType !== "A" && recordType !== "AAAA") {
+			if (
+				hasAlias &&
+				recordType !== "A" &&
+				recordType !== "AAAA" &&
+				recordType !== "CNAME"
+			) {
 				issues.push({
 					code: "RECORD_BAD_ALIAS_TYPE",
-					message: `DNS record "${nodeId}" aliases a load balancer and must use type A or AAAA (got ${recordType})`,
+					message: `DNS record "${nodeId}" aliases a load balancer and must use type A, AAAA, or CNAME (got ${recordType})`,
 					path: { kind: "node", id: nodeId },
 				});
 			}

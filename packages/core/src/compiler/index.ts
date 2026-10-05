@@ -829,17 +829,22 @@ function writeEcs(
 				);
 			}
 
-			const image =
-				imageOverride ??
-				(repositoryRefs[0]
-					? `\${${refAttr(ctx.addressById, repositoryRefs[0], "repository_url")}}:${imageTag}`
-					: "nginx:latest");
+			// The repository URL is an intentional interpolation (preserved verbatim);
+			// user-supplied image strings are escaped so `${...}` stays literal.
+			const imageExpr =
+				imageOverride !== undefined
+					? hclString(imageOverride)
+					: repositoryRefs[0]
+						? hclInterpString(
+								`\${${refAttr(ctx.addressById, repositoryRefs[0], "repository_url")}}:${imageTag}`,
+							)
+						: hclString("nginx:latest");
 
 			const containerLines = [
 				"container_definitions = jsonencode([",
 				"  {",
 				`    name      = ${hclString(resource.name)}`,
-				`    image     = ${hclString(image)}`,
+				`    image     = ${imageExpr}`,
 				"    essential = true",
 				"    portMappings = [",
 				"      {",
@@ -874,9 +879,7 @@ function writeEcs(
 		writer.line(
 			`name            = ${hclString(`cloudman-${base}-${suffix}-svc`.slice(0, 255))}`,
 		);
-		writer.line(
-			`cluster         = aws_ecs_cluster.${resource.name}.id`,
-		);
+		writer.line(`cluster         = aws_ecs_cluster.${resource.name}.id`);
 		writer.line(
 			`task_definition = aws_ecs_task_definition.${resource.name}-task.arn`,
 		);
@@ -1038,7 +1041,7 @@ function writeAurora(
 	ctx: CompileContext,
 ): void {
 	const suffix = ctx.options.bucketNameSuffix ?? "change-me";
-	const base = `cloudman-aurora-${resource.name}-${suffix}`;
+	const base = `cloudman-aurora-${resource.name}`;
 
 	const subnetRefs =
 		Array.isArray(resource.attributes.subnet_refs) &&
@@ -1632,12 +1635,14 @@ function writeApiGateway(
 }
 
 /**
- * Finds VPCs that require public internet access but have no internet gateway
- * node, so the compiler can synthesize one. A VPC needs it when an
- * internet-facing ALB (the default) is placed in its subnets.
+ * Marks subnets that back internet-facing ALBs (and lack an explicit internet
+ * gateway node) as public. Consumers use this to set
+ * `map_public_ip_on_launch` on those subnets and to force `assign_public_ip`
+ * on ECS tasks placed in them. It does NOT synthesize IGWs or routes —
+ * internet gateways are only emitted for explicit `aws_internet_gateway` IR
+ * resources.
  */
 function planInternetNetworking(document: IRDocument): {
-	vpcs: Map<string, string[]>;
 	publicSubnets: Set<string>;
 } {
 	const subnetVpc = new Map<string, string>();
@@ -1657,7 +1662,6 @@ function planInternetNetworking(document: IRDocument): {
 		}
 	}
 
-	const vpcs = new Map<string, string[]>();
 	const publicSubnets = new Set<string>();
 	for (const resource of document.resources) {
 		if (resource.kind !== "aws_lb" || resource.attributes.internal === true)
@@ -1668,13 +1672,10 @@ function planInternetNetworking(document: IRDocument): {
 			if (typeof ref !== "string") continue;
 			const vpcRef = subnetVpc.get(ref);
 			if (vpcRef === undefined || vpcsWithIgw.has(vpcRef)) continue;
-			const list = vpcs.get(vpcRef) ?? [];
-			list.push(ref);
-			vpcs.set(vpcRef, list);
 			publicSubnets.add(ref);
 		}
 	}
-	return { vpcs, publicSubnets };
+	return { publicSubnets };
 }
 
 export function compileIR(

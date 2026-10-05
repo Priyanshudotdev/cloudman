@@ -104,7 +104,7 @@ export function analyzeRisks(document: IRDocument): ResourceRisk[] {
 		}
 
 		if (
-			resource.kind === "aws_sqs" &&
+			resource.kind === "aws_sqs_queue" &&
 			a.visibility_timeout_seconds !== undefined &&
 			(a.visibility_timeout_seconds as number) > 300
 		) {

@@ -7,7 +7,7 @@
 export function hclString(value: string): string {
 	// JSON.stringify covers quotes/backslashes/control chars;
 	// HCL additionally escapes interpolation with a doubled ${.
-	return JSON.stringify(value).replace(/\$\{/g, "$${");
+	return JSON.stringify(value).replace(/\$\{/g, () => "$${");
 }
 
 /**

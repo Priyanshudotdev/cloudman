@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-
+import { hclString } from "../compiler/hcl";
 import {
 	buildIR,
 	cidrContains,
@@ -624,11 +624,26 @@ describe("catalog v2 validation", () => {
 		node(graph4, "zone-3", "aws_route53_zone", { zoneName: "example.com" });
 		node(graph4, "rec-2", "aws_route53_record", {
 			recordName: "app",
-			recordType: "CNAME",
+			recordType: "TXT",
 		});
 		connect(graph4, "rec-2", "zone-3");
 		connect(graph4, "rec-2", "alb-x");
 		expect(validateGraph(graph4).issues.map((i) => i.code)).toContain(
+			"RECORD_BAD_ALIAS_TYPE",
+		);
+
+		const graph4b = vpcStack();
+		node(graph4b, "alb-y", "aws_alb");
+		node(graph4b, "zone-3b", "aws_route53_zone", {
+			zoneName: "example.com",
+		});
+		node(graph4b, "rec-3", "aws_route53_record", {
+			recordName: "app",
+			recordType: "CNAME",
+		});
+		connect(graph4b, "rec-3", "zone-3b");
+		connect(graph4b, "rec-3", "alb-y");
+		expect(validateGraph(graph4b).issues.map((i) => i.code)).not.toContain(
 			"RECORD_BAD_ALIAS_TYPE",
 		);
 
@@ -712,6 +727,9 @@ describe("catalog v2 IR + compile", () => {
 		);
 		expect(main).toContain('resource "aws_rds_cluster" "aurora-1"');
 		expect(main).toContain('engine             = "aurora-postgresql"');
+		expect(main).toContain(
+			'cluster_identifier = "cloudman-aurora-aurora-1-ab12cd"',
+		);
 		expect(main).toContain(
 			'resource "aws_rds_cluster_instance" "aurora-1-instance"',
 		);
@@ -807,7 +825,7 @@ describe("catalog v2 IR + compile", () => {
 		expect(main).toContain("role       = aws_iam_role.role-1.name");
 		expect(main).toContain('resource "aws_sqs_queue" "queue-1"');
 		expect(main).toContain(
-			'name                       = "cloudman-queue-1.fifo"',
+			'name                       = "cloudman-queue-1-ab12cd.fifo"',
 		);
 		expect(main).toContain("fifo_queue                 = true");
 		expect(main).toContain('resource "aws_sns_topic" "topic-1"');
@@ -892,5 +910,44 @@ describe("catalog v2 IR + compile", () => {
 			'resource "aws_api_gateway_deployment" "api-1-deployment"',
 		);
 		expect(main).toContain('resource "aws_api_gateway_stage" "api-1-stage"');
+	});
+});
+
+describe("hcl interpolation escaping", () => {
+	// "$" lives in its own literal so no source string contains "${",
+	// which would trip noTemplateCurlyInString.
+	const D = "$";
+	test("hclString escapes interpolation so HCL treats it literally", () => {
+		expect(hclString(D + "{var}")).toBe('"' + D + D + '{var}"');
+		expect(hclString("price is " + D + "{aws:username}")).toBe(
+			'"price is ' + D + D + '{aws:username}"',
+		);
+		expect(hclString("plain")).toBe('"plain"');
+	});
+
+	test("user strings containing interpolation are emitted literally", () => {
+		const graph = vpcStack();
+		node(graph, "sg-2", "aws_security_group", {
+			description: "cost center " + D + "{var.team}",
+		});
+		const main = compiled(graph);
+		expect(main).toContain(
+			'description = "cost center ' + D + D + '{var.team}"',
+		);
+	});
+
+	test("ecs image uri still interpolates the repository url", () => {
+		const graph = vpcStack();
+		node(graph, "repo-9", "aws_ecr");
+		node(graph, "role-9", "aws_iam_role", { assumeService: "ecs-tasks" });
+		node(graph, "svc-9", "aws_ecs");
+		connect(graph, "svc-9", "subnet-1");
+		connect(graph, "svc-9", "sg-1");
+		connect(graph, "svc-9", "role-9");
+		connect(graph, "svc-9", "repo-9");
+		const main = compiled(graph);
+		expect(main).toContain(
+			'"$' + '{aws_ecr_repository.repo-9.repository_url}:latest"',
+		);
 	});
 });

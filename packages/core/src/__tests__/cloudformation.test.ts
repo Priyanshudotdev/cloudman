@@ -230,19 +230,30 @@ describe("exportCloudFormation", () => {
 			"AWS::Route53::RecordSet",
 			"AWS::Logs::LogGroup",
 			"AWS::ApiGateway::RestApi",
+			"AWS::ApiGateway::Resource",
 			"AWS::ApiGateway::Method",
+			"AWS::Lambda::Permission",
 			"AWS::ApiGateway::Deployment",
 			"AWS::ApiGateway::Stage",
 		];
 		for (const type of expected) expect(t).toContain(type);
 		const singleEmission = expected.filter(
-			(type) => type !== "AWS::RDS::DBSubnetGroup",
+			(type) =>
+				type !== "AWS::RDS::DBSubnetGroup" && type !== "AWS::RDS::DBInstance",
 		);
 		for (const type of singleEmission)
 			expect(
 				t.filter((entry) => entry === type),
 				`type ${type} should be emitted exactly once`,
 			).toHaveLength(1);
+		expect(
+			t.filter((entry) => entry === "AWS::RDS::DBSubnetGroup"),
+			"rds + aurora each emit a subnet group",
+		).toHaveLength(2);
+		expect(
+			t.filter((entry) => entry === "AWS::RDS::DBInstance"),
+			"rds instance + aurora cluster instance",
+		).toHaveLength(2);
 	});
 
 	test("wires refs and DependsOn across a networking stack", () => {
@@ -466,9 +477,202 @@ describe("exportCloudFormation", () => {
 			ImageUri: {
 				"Fn::Join": [
 					"",
-					[{ "Fn::GetAtt": ["ECRRepositoryRepo", "Arn"] }, ":latest"],
+					[{ "Fn::GetAtt": ["ECRRepositoryRepo", "RepositoryUrl"] }, ":latest"],
 				],
 			},
 		});
+	});
+
+	test("ecs container image is assembled from the repository url", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "svc",
+			region: "us-east-1",
+			resources: [
+				resource("repo", "aws_ecr_repository", {}),
+				resource("svc", "aws_ecs_cluster", {
+					cpu: 256,
+					memory: 512,
+					repository_refs: ["repo"],
+					image_tag: "v2",
+				}),
+			],
+		};
+
+		const task = resourceOf(template(doc), "ECSClusterSvcTaskDefinition");
+		const containers = task.Properties?.ContainerDefinitions as
+			| Array<Record<string, unknown>>
+			| undefined;
+		expect(containers?.[0]?.Image).toEqual({
+			"Fn::Join": [
+				"",
+				[{ "Fn::GetAtt": ["ECRRepositoryRepo", "RepositoryUrl"] }, ":v2"],
+			],
+		});
+	});
+
+	test("dynamodb honors uppercase PROVISIONED billing mode", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "ddb",
+			region: "us-east-1",
+			resources: [
+				resource("table", "aws_dynamodb_table", {
+					hash_key: "id",
+					billing_mode: "PROVISIONED",
+				}),
+			],
+		};
+
+		const table = resourceOf(template(doc), "DynamoDBTableTable");
+		expect(table.Properties?.BillingMode).toBe("PROVISIONED");
+		expect(table.Properties?.ProvisionedThroughput).toEqual({
+			ReadCapacityUnits: 1,
+			WriteCapacityUnits: 1,
+		});
+	});
+
+	test("ecr honors uppercase IMMUTABLE tag mutability", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "ecr",
+			region: "us-east-1",
+			resources: [
+				resource("repo", "aws_ecr_repository", {
+					image_tag_mutability: "IMMUTABLE",
+				}),
+			],
+		};
+
+		const repo = resourceOf(template(doc), "ECRRepositoryRepo");
+		expect(repo.Properties?.ImageTagMutability).toBe("IMMUTABLE");
+	});
+
+	test("sqs fifo flag is a boolean", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "q",
+			region: "us-east-1",
+			resources: [
+				resource("queue", "aws_sqs_queue", {
+					visibility_timeout_seconds: 30,
+					fifo_queue: true,
+				}),
+			],
+		};
+
+		const queue = resourceOf(template(doc), "SQSQueueQueue");
+		expect(queue.Properties?.FifoQueue).toBe(true);
+		expect(queue.Properties?.QueueName).toBe("queue.fifo");
+	});
+
+	test("efs emits one mount target per subnet", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "efs",
+			region: "us-east-1",
+			resources: [
+				resource("vpc", "aws_vpc", { cidr_block: "10.0.0.0/16" }),
+				resource("subnet-a", "aws_subnet", {
+					vpc_ref: "vpc",
+					cidr_block: "10.0.1.0/24",
+				}),
+				resource("subnet-b", "aws_subnet", {
+					vpc_ref: "vpc",
+					cidr_block: "10.0.2.0/24",
+				}),
+				resource("sg", "aws_security_group", { vpc_ref: "vpc" }),
+				resource("fs", "aws_efs_file_system", {
+					subnet_refs: ["subnet-a", "subnet-b"],
+					security_group_refs: ["sg"],
+				}),
+			],
+		};
+
+		const t = template(doc);
+		const targets = Object.entries(t.Resources).filter(
+			([, r]) => r.Type === "AWS::EFS::MountTarget",
+		);
+		expect(targets).toHaveLength(2);
+		const subnetIds = targets.map(
+			([, r]) => (r.Properties as Record<string, unknown>)?.SubnetId,
+		);
+		expect(subnetIds).toContainEqual({ Ref: "SubnetSubneta" });
+		expect(subnetIds).toContainEqual({ Ref: "SubnetSubnetb" });
+		for (const [, r] of targets) {
+			expect((r.Properties as Record<string, unknown>)?.FileSystemId).toEqual({
+				Ref: "EFSFileSystemFs",
+			});
+		}
+	});
+
+	test("api gateway emits a resource per route path plus lambda permission", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "api",
+			region: "us-east-1",
+			resources: [
+				resource("fn", "aws_lambda_function", { code_source: "zip" }),
+				resource("api", "aws_api_gateway_rest_api", {
+					http_method: "POST",
+					route_path: "items",
+					lambda_refs: ["fn"],
+				}),
+			],
+		};
+
+		const t = template(doc);
+		const apiResource = resourceOf(t, "ApiGatewayRestApiApiResource");
+		expect(apiResource.Type).toBe("AWS::ApiGateway::Resource");
+		expect(apiResource.Properties?.PathPart).toBe("items");
+		const permission = resourceOf(t, "ApiGatewayRestApiApiPermission");
+		expect(permission.Type).toBe("AWS::Lambda::Permission");
+		expect(permission.Properties?.Action).toBe("lambda:InvokeFunction");
+		expect(permission.Properties?.Principal).toBe("apigateway.amazonaws.com");
+		expect(permission.Properties?.FunctionName).toEqual({
+			"Fn::GetAtt": ["LambdaFunctionFn", "Arn"],
+		});
+	});
+
+	test("aurora emits the cluster instance alongside the cluster", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "aurora",
+			region: "us-east-1",
+			resources: [
+				resource("vpc", "aws_vpc", { cidr_block: "10.0.0.0/16" }),
+				resource("subnet", "aws_subnet", { vpc_ref: "vpc" }),
+				resource("db", "aws_rds_cluster", {
+					engine: "aurora-postgresql",
+					instance_class: "db.t4g.medium",
+					subnet_refs: ["subnet"],
+				}),
+			],
+		};
+
+		const t = template(doc);
+		const instance = resourceOf(t, "AuroraClusterDbInstance");
+		expect(instance.Type).toBe("AWS::RDS::DBInstance");
+		const props = instance.Properties as Record<string, unknown>;
+		expect(props.DBClusterIdentifier).toEqual({ Ref: "AuroraClusterDb" });
+		expect(props.DBInstanceClass).toBe("db.t4g.medium");
+	});
+
+	test("throws on references to unknown nodes instead of emitting raw ids", () => {
+		const doc: IRDocument = {
+			version: 1,
+			name: "bad",
+			region: "us-east-1",
+			resources: [
+				resource("subnet", "aws_subnet", {
+					vpc_ref: "ghost",
+					cidr_block: "10.0.1.0/24",
+				}),
+			],
+		};
+
+		expect(() => exportCloudFormation(doc)).toThrow(
+			'no CloudFormation logical id for referenced node "ghost"',
+		);
 	});
 });
