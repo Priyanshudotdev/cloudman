@@ -216,11 +216,23 @@ describe("api health + auth", () => {
 		expect(res.status).toBe(404);
 	});
 
-	test("protected routes fall back to the shared anonymous user", async () => {
-		// Auth pass-through: without a session the request is still served,
-		// scoped to a single shared workspace user instead of being rejected.
+	test("protected routes reject unauthenticated requests with 401", async () => {
+		// Auth wall: without a session (and without ALLOW_ANON=1) the API
+		// refuses to serve. See "api auth wall + ownership" below for the
+		// opt-in anon fallback and cross-user isolation.
 		const res = await realAuthApp.request("/api/projects");
-		expect(res.status).toBe(200);
+		expect(res.status).toBe(401);
+		const body = await json(res);
+		expect(body.error).toBe("Unauthorized");
+	});
+
+	test("protected writes reject unauthenticated requests with 401", async () => {
+		const res = await realAuthApp.request("/api/projects", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ name: "nope" }),
+		});
+		expect(res.status).toBe(401);
 	});
 });
 
@@ -1030,5 +1042,243 @@ describe("api deployment lifecycle (mock worker)", () => {
 
 		const res = await request(app, "DELETE", `/api/projects/${project._id}`);
 		expect(res.status).toBe(200);
+	});
+});
+
+describe("api kind guards + CAS + event persistence", () => {
+	test("approving a kind:repo deployment via infra route → 409", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "kind-guard-infra",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const queued = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const { deployment } = (await json(queued)) as {
+			deployment: { _id: string };
+		};
+		await simulatePlan(deployment._id);
+		await deploymentModel.updateOne(
+			{ _id: deployment._id },
+			{ $set: { kind: "repo" } },
+		);
+		const res = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/approve`,
+		);
+		expect(res.status).toBe(409);
+		const body = await json(res);
+		expect(typeof body.error).toBe("string");
+	});
+
+	test("retrying a kind:infra deployment via repo route → 409/404", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "kind-guard-repo",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const queued = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const { deployment } = (await json(queued)) as {
+			deployment: { _id: string };
+		};
+		const now = new Date();
+		await deploymentModel.updateOne(
+			{ _id: deployment._id },
+			{ $set: { status: "failed", updatedAt: now } },
+		);
+		const res = await request(
+			app,
+			"POST",
+			`/api/repo-deployments/${deployment._id}/retry`,
+		);
+		expect([404, 409]).toContain(res.status);
+	});
+
+	test("cancel persists canceled status and event visible via GET /:id", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "cancel-persist",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const queued = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const { deployment } = (await json(queued)) as {
+			deployment: { _id: string };
+		};
+		const canceled = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/cancel`,
+		);
+		expect(canceled.status).toBe(200);
+		const persisted = await deploymentModel.findById(deployment._id).lean();
+		expect(persisted?.status).toBe("canceled");
+		const fetched = (await json(
+			await request(app, "GET", `/api/deployments/${deployment._id}`),
+		)) as {
+			deployment: { status: string; events: Array<{ message: string }> };
+		};
+		expect(fetched.deployment.status).toBe("canceled");
+		expect(
+			fetched.deployment.events.some((e) =>
+				e.message.toLowerCase().includes("cancel"),
+			),
+		).toBe(true);
+	});
+
+	test("double-approve race → second returns 409", async () => {
+		const created = await request(app, "POST", "/api/projects", {
+			name: "double-approve",
+		});
+		const { project } = (await json(created)) as { project: { _id: string } };
+		await request(app, "PUT", `/api/projects/${project._id}/graph`, {
+			graph: deployGraph(),
+		});
+		const queued = await request(
+			app,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			{},
+		);
+		const { deployment } = (await json(queued)) as {
+			deployment: { _id: string };
+		};
+		await simulatePlan(deployment._id);
+		const first = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/approve`,
+		);
+		expect(first.status).toBe(200);
+		const second = await request(
+			app,
+			"POST",
+			`/api/deployments/${deployment._id}/approve`,
+		);
+		expect(second.status).toBe(409);
+	});
+});
+
+async function signUp(handler: Hono<AppEnv>, email: string): Promise<string> {
+	const res = await handler.request("/api/auth/sign-up/email", {
+		method: "POST",
+		headers: { "content-type": "application/json" },
+		body: JSON.stringify({
+			name: email,
+			email,
+			password: "test-password-12345",
+		}),
+	});
+	expect(res.status).toBe(200);
+	const setCookie =
+		typeof res.headers.getSetCookie === "function"
+			? res.headers.getSetCookie()
+			: (res.headers.get("set-cookie")?.split(/,(?=[^;,]+=[^;,]+)/) ?? []);
+	const cookie = setCookie.map((c) => c.split(";")[0]).join("; ");
+	expect(cookie.length).toBeGreaterThan(0);
+	return cookie;
+}
+
+async function authedRequest(
+	handler: Hono<AppEnv>,
+	method: string,
+	path: string,
+	cookie: string,
+	body?: unknown,
+): Promise<Response> {
+	return await handler.request(path, {
+		method,
+		headers: {
+			cookie,
+			...(body === undefined ? {} : { "content-type": "application/json" }),
+		},
+		body: body === undefined ? undefined : JSON.stringify(body),
+	});
+}
+
+describe("api auth wall + ownership", () => {
+	test("ALLOW_ANON opt-in serves the shared workspace user", async () => {
+		const { createApp } = await import("../app");
+		const { createRequireAuth } = await import("../lib/session");
+		const anonApp = createApp({
+			authMiddleware: createRequireAuth({ allowAnon: true }),
+			disableLogging: true,
+		});
+		const res = await anonApp.request("/api/projects");
+		expect(res.status).toBe(200);
+	});
+
+	test("users cannot touch each other's projects or connections", async () => {
+		const cookieA = await signUp(realAuthApp, "owner-a@example.com");
+		const cookieB = await signUp(realAuthApp, "owner-b@example.com");
+
+		const created = await authedRequest(
+			realAuthApp,
+			"POST",
+			"/api/projects",
+			cookieA,
+			{ name: "a-private" },
+		);
+		expect(created.status).toBe(201);
+		const { project } = (await json(created)) as {
+			project: { _id: string; ownerUserId: string };
+		};
+		expect(typeof project.ownerUserId).toBe("string");
+
+		const getOther = await authedRequest(
+			realAuthApp,
+			"GET",
+			`/api/projects/${project._id}`,
+			cookieB,
+		);
+		expect(getOther.status).toBe(404);
+
+		const hijack = await authedRequest(
+			realAuthApp,
+			"PUT",
+			`/api/projects/${project._id}`,
+			cookieB,
+			{ name: "hijacked" },
+		);
+		expect(hijack.status).toBe(404);
+
+		const deployOther = await authedRequest(
+			realAuthApp,
+			"POST",
+			`/api/projects/${project._id}/deployments`,
+			cookieB,
+			{},
+		);
+		expect(deployOther.status).toBe(404);
+
+		const conns = await authedRequest(
+			realAuthApp,
+			"GET",
+			"/api/aws-connections",
+			cookieB,
+		);
+		expect(conns.status).toBe(200);
+		const connsBody = (await json(conns)) as { connections: unknown[] };
+		expect(connsBody.connections).toEqual([]);
 	});
 });

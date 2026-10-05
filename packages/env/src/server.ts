@@ -44,6 +44,13 @@ export const env = createEnv({
 		/** Optional LLM-backed stack generation (OpenRouter). Engine templates are used when unset. */
 		OPENROUTER_API_KEY: z.string().min(1).optional(),
 		CLOUDMAN_LLM_GENERATION: z.enum(["0", "1"]).optional().default("0"),
+		/**
+		 * Dev-only escape hatch: unauthenticated API requests are served as a
+		 * single shared workspace user instead of being rejected with 401.
+		 * Never enable in production — every visitor shares one workspace,
+		 * including stored AWS/SSH credentials.
+		 */
+		ALLOW_ANON: z.enum(["0", "1"]).optional().default("0"),
 	},
 	runtimeEnv: runtimeEnv,
 	skipValidation: !!process.env.SKIP_ENV_VALIDATION,
