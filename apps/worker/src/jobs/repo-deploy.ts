@@ -215,6 +215,15 @@ export async function handleRepoDeployJob(
 
 	const server = (await Server.findById(serverId).lean()) as any;
 	if (!server) throw new Error("Server " + serverId + " not found");
+	// The API already rejects a server the caller does not own; re-check here so a
+	// poisoned or legacy deployment row can never make the worker decrypt another
+	// tenant's SSH credential.
+	const owner = (project as any)?.ownerUserId;
+	if (owner && String(owner) !== String(server.userId)) {
+		throw new Error(
+			"Server " + serverId + " does not belong to the project owner",
+		);
+	}
 	const credential = resolveServerCredential(
 		server.credentialEnc,
 		env.CLOUDMAN_SECRET,

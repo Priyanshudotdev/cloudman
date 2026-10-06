@@ -68,11 +68,21 @@ export function createAwsConnectionsRoute(
 				"[api] CLOUDMAN_SECRET unset — storing AWS external ID in PLAINTEXT",
 			);
 		}
+		if (!env.CLOUDMAN_SECRET) {
+			console.error(
+				"[api] refusing to store an AWS connection: CLOUDMAN_SECRET is not configured, so the external ID would be persisted in plaintext",
+			);
+			return c.json(
+				{
+					error:
+						"Secret storage is not configured on this server (CLOUDMAN_SECRET missing). Connection cannot be saved.",
+				},
+				503,
+			);
+		}
 		const connection = await AwsConnection.create({
 			...parsed.data,
-			externalId: env.CLOUDMAN_SECRET
-				? encryptSecret(parsed.data.externalId, env.CLOUDMAN_SECRET)
-				: parsed.data.externalId,
+			externalId: encryptSecret(parsed.data.externalId, env.CLOUDMAN_SECRET),
 			userId: c.get("userId"),
 		});
 		const { externalId: _hidden, ...safe } = connection.toObject();
@@ -103,13 +113,21 @@ export function createAwsConnectionsRoute(
 		if (parsed.data.region !== undefined) patch.region = parsed.data.region;
 		if (parsed.data.externalId !== undefined) {
 			if (!env.CLOUDMAN_SECRET) {
-				console.warn(
-					"[api] CLOUDMAN_SECRET unset — storing AWS external ID in PLAINTEXT",
+				console.error(
+					"[api] refusing to update AWS connection: CLOUDMAN_SECRET is not configured",
+				);
+				return c.json(
+					{
+						error:
+							"Secret storage is not configured on this server (CLOUDMAN_SECRET missing). Connection cannot be updated.",
+					},
+					503,
 				);
 			}
-			patch.externalId = env.CLOUDMAN_SECRET
-				? encryptSecret(parsed.data.externalId, env.CLOUDMAN_SECRET)
-				: parsed.data.externalId;
+			patch.externalId = encryptSecret(
+				parsed.data.externalId,
+				env.CLOUDMAN_SECRET,
+			);
 		}
 		const updated = await AwsConnection.findOneAndUpdate(
 			{ _id: id, userId: c.get("userId") },
@@ -182,13 +200,17 @@ export function createAwsConnectionsRoute(
 				arn: identity.Arn,
 			});
 		} catch (error) {
+			// STS error text can carry account ids, role ARNs and request ids,
+			// which lets a caller enumerate accounts. Log it, return a stable code.
+			console.error("[api] aws connection verify failed", {
+				connectionId: c.req.param("id"),
+				error: error instanceof Error ? error.message : String(error),
+			});
 			return c.json(
 				{
 					ok: false,
 					error:
-						error instanceof Error
-							? error.message
-							: "Failed to verify connection",
+						"Could not assume the role — check the ARN, external ID, and region",
 				},
 				502,
 			);

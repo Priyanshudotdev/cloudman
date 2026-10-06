@@ -1,5 +1,11 @@
 import type { IRDocument, IRResource } from "../ir/schema";
-import { HclWriter, hclInterpString, hclString, hclValue } from "./hcl";
+import {
+	HclWriter,
+	hclEscapeFragment,
+	hclInterpString,
+	hclString,
+	hclValue,
+} from "./hcl";
 
 export interface CompiledFile {
 	path: string;
@@ -831,13 +837,13 @@ function writeEcs(
 
 			// The repository URL is an intentional interpolation (preserved verbatim);
 			// user-supplied image strings are escaped so `${...}` stays literal.
+			// The tag is spliced with hclEscapeFragment so the ref stays live while
+			// the tag cannot inject HCL of its own.
 			const imageExpr =
 				imageOverride !== undefined
 					? hclString(imageOverride)
 					: repositoryRefs[0]
-						? hclInterpString(
-								`\${${refAttr(ctx.addressById, repositoryRefs[0], "repository_url")}}:${imageTag}`,
-							)
+						? `"${`\${${refAttr(ctx.addressById, repositoryRefs[0], "repository_url")}}`}:${hclEscapeFragment(imageTag)}"`
 						: hclString("nginx:latest");
 
 			const containerLines = [

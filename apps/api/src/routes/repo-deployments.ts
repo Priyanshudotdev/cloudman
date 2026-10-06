@@ -1,4 +1,4 @@
-import { Deployment, Project } from "@my-better-t-app/db";
+import { Deployment, Project, Server } from "@my-better-t-app/db";
 import { getRepoQueue } from "@my-better-t-app/queue";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -89,6 +89,17 @@ export function createRepoDeploymentsRoute(
 			);
 		}
 
+		// The worker resolves this server and decrypts its SSH credential without
+		// a user filter, so a request-supplied id must be proven to belong to the
+		// caller — otherwise a repo project could be pointed at another user's box.
+		const server = await Server.findOne({
+			_id: serverId,
+			userId: c.get("userId"),
+		}).lean();
+		if (!server) {
+			return c.json({ error: "Not found" }, 404);
+		}
+
 		const now = new Date();
 		const deployment = await Deployment.create({
 			projectId: project._id,
@@ -125,10 +136,7 @@ export function createRepoDeploymentsRoute(
 		const deployment = await loadOwnedRepoSchema(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
 		if (deployment.kind !== "repo") {
-			return c.json(
-				{ error: "Deployment is not a repo deployment" },
-				409,
-			);
+			return c.json({ error: "Deployment is not a repo deployment" }, 409);
 		}
 		const status = deployment.status as string;
 		if (
@@ -179,10 +187,7 @@ export function createRepoDeploymentsRoute(
 		const deployment = await loadOwnedRepoSchema(c, c.req.param("id"));
 		if (!deployment) return c.json({ error: "Not found" }, 404);
 		if (deployment.kind !== "repo") {
-			return c.json(
-				{ error: "Deployment is not a repo deployment" },
-				409,
-			);
+			return c.json({ error: "Deployment is not a repo deployment" }, 409);
 		}
 		const status = deployment.status as string;
 		if (
@@ -215,10 +220,7 @@ export function createRepoDeploymentsRoute(
 			},
 		);
 		if (result.modifiedCount === 0) {
-			return c.json(
-				{ error: "Deployment is no longer cancellable." },
-				409,
-			);
+			return c.json({ error: "Deployment is no longer cancellable." }, 409);
 		}
 		try {
 			const job = await getRepoQueue()

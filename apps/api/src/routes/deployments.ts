@@ -161,10 +161,7 @@ export function createDeploymentsRoute(
 			{ $set: { status: "canceled", completedAt: now, updatedAt: now } },
 		);
 		if (result.modifiedCount === 0) {
-			return c.json(
-				{ error: "Deployment is no longer cancellable." },
-				409,
-			);
+			return c.json({ error: "Deployment is no longer cancellable." }, 409);
 		}
 		try {
 			const removed = await getPlanQueue().remove(String(deployment._id));
@@ -220,10 +217,7 @@ export function createDeploymentsRoute(
 			{ $set: { status: "queued", updatedAt: now } },
 		);
 		if (result.modifiedCount === 0) {
-			return c.json(
-				{ error: "Deployment is no longer retryable." },
-				409,
-			);
+			return c.json({ error: "Deployment is no longer retryable." }, 409);
 		}
 		await recordApiDeploymentEvent(String(deployment._id), {
 			level: "info",

@@ -88,6 +88,21 @@ export function backendTfContents(
 	region: string,
 	projectId: string,
 ): string {
+	// These three are interpolated into HCL that `tofu apply` loads, and they sit
+	// next to process credentials in the child env. Reject anything that could
+	// close the string literal or inject a block rather than relying on callers
+	// to validate first — this file is the last checkpoint before execution.
+	for (const [label, value] of [
+		["bucket", bucket],
+		["region", region],
+		["projectId", projectId],
+	] as const) {
+		if (!/^[A-Za-z0-9._/-]+$/.test(value)) {
+			throw new Error(
+				`Refusing to write backend.tf: ${label} contains characters that are not safe for HCL (got ${JSON.stringify(value.slice(0, 40))})`,
+			);
+		}
+	}
 	return `terraform {
   backend "s3" {
     bucket       = "${bucket}"

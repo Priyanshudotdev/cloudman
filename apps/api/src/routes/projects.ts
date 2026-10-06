@@ -12,10 +12,7 @@ import {
 	Project,
 	Server,
 } from "@my-better-t-app/db";
-import {
-	getMaintenanceQueue,
-	getPlanQueue,
-} from "@my-better-t-app/queue";
+import { getMaintenanceQueue, getPlanQueue } from "@my-better-t-app/queue";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { z } from "zod";
@@ -316,48 +313,49 @@ export function createProjectsRoute(
 		"/:id/graph",
 		bodyLimit({ maxSize: 512 * 1024 }),
 		async (c) => {
-		const id = c.req.param("id");
-		const project = await loadOwnedProject(c, id);
-		if (!project) return c.json({ error: "Not found" }, 404);
+			const id = c.req.param("id");
+			const project = await loadOwnedProject(c, id);
+			if (!project) return c.json({ error: "Not found" }, 404);
 
-		const raw = await c.req.json();
-		const parsed = saveGraphSchema.safeParse(raw);
-		if (!parsed.success) {
-			return c.json(
-				{ error: "Invalid request", issues: parsed.error.issues },
-				400,
-			);
-		}
+			const raw = await c.req.json();
+			const parsed = saveGraphSchema.safeParse(raw);
+			if (!parsed.success) {
+				return c.json(
+					{ error: "Invalid request", issues: parsed.error.issues },
+					400,
+				);
+			}
 
-		const validation = validateGraph(parsed.data.graph);
-		if (!validation.valid) {
-			return c.json(
-				{ error: "Graph validation failed", issues: validation.issues },
-				422,
-			);
-		}
+			const validation = validateGraph(parsed.data.graph);
+			if (!validation.valid) {
+				return c.json(
+					{ error: "Graph validation failed", issues: validation.issues },
+					422,
+				);
+			}
 
-		const version = project.latestGraphVersion + 1;
-		let graphVersion;
+const version = project.latestGraphVersion + 1;
+		let graphVersionId: unknown;
 		try {
-			graphVersion = await GraphVersion.create({
+			const created = await GraphVersion.create({
 				projectId: id,
 				version,
 				graph: parsed.data.graph,
 				createdByUserId: c.get("userId"),
 			});
+			graphVersionId = created._id;
 		} catch (error) {
-			if ((error as { code?: number }).code === 11000) {
-				return c.json({ error: "Version conflict, retry save" }, 409);
+				if ((error as { code?: number }).code === 11000) {
+					return c.json({ error: "Version conflict, retry save" }, 409);
+				}
+				throw error;
 			}
-			throw error;
-		}
-		await Project.updateOne(
-			{ _id: id },
-			{ latestGraphVersion: version, updatedAt: new Date() },
-		);
+			await Project.updateOne(
+				{ _id: id },
+				{ latestGraphVersion: version, updatedAt: new Date() },
+			);
 
-		return c.json({ graphVersionId: graphVersion._id, version }, 201);
+			return c.json({ graphVersionId, version }, 201);
 		},
 	);
 
@@ -400,12 +398,23 @@ export function createProjectsRoute(
 		return c.json({ graphVersion: graphVersion ?? null });
 	});
 
+	// AWS region identifiers (us-east-1, eu-west-2, us-gov-west-1, ap-southeast-2).
+	// Constrained because the region is interpolated into the generated
+	// backend.tf that the worker executes; an allowlist is the only safe shape.
+	const REGION_PATTERN = /^[a-z]{2}(-gov|-iso[a-z]?)?-[a-z]+-\d$/;
+
 	const createDeploymentSchema = z.object({
 		awsConnectionId: z
 			.string()
 			.regex(/^[a-f\d]{24}$/i)
 			.optional(),
-		region: z.string().min(1).optional(),
+		region: z
+			.string()
+			.regex(
+				REGION_PATTERN,
+				"must be an AWS region identifier (e.g. us-east-1)",
+			)
+			.optional(),
 		action: z.enum(["provision", "destroy"]).default("provision"),
 	});
 

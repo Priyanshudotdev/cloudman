@@ -91,14 +91,10 @@ const maintenanceWorker = new Worker<MaintenanceJobData>(
 	},
 );
 
-const repoWorker = new Worker<RepoJobData>(
-	REPO_QUEUE,
-	handleRepoDeployJob,
-	{
-		connection,
-		concurrency: 1,
-	},
-);
+const repoWorker = new Worker<RepoJobData>(REPO_QUEUE, handleRepoDeployJob, {
+	connection,
+	concurrency: 1,
+});
 
 for (const [name, worker] of [
 	["plan", planWorker],

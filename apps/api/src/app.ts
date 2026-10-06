@@ -1,6 +1,7 @@
 import { getAuth } from "@my-better-t-app/auth";
 import { env } from "@my-better-t-app/env/server";
 import { Hono, type MiddlewareHandler } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { type AppEnv, requireAuth } from "./lib/session";
@@ -37,6 +38,11 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 			credentials: true,
 		}),
 	);
+
+	// Ceiling for every request body. Routes may tighten this; without it a
+	// single large POST is buffered and JSON-parsed before any handler-level
+	// field limit is evaluated.
+	app.use("*", bodyLimit({ maxSize: 512 * 1024 }));
 
 	app.onError((error, c) => {
 		console.error("[api] unhandled error:", error);

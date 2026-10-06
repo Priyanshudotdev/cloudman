@@ -19,6 +19,16 @@ export function hclInterpString(value: string): string {
 	return JSON.stringify(value);
 }
 
+/**
+ * Escapes a user-supplied fragment for interpolation inside an HCL string that
+ * already contains an intentional `${...}` reference. Returns the escaped
+ * content WITHOUT surrounding quotes so it can be spliced into a quoted
+ * expression. Use this when part of the string must stay live.
+ */
+export function hclEscapeFragment(value: string): string {
+	return hclString(value).slice(1, -1);
+}
+
 export function hclValue(value: unknown): string {
 	if (typeof value === "string") return hclString(value);
 	if (typeof value === "number" || typeof value === "boolean")

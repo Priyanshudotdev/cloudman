@@ -66,8 +66,12 @@ export function createServersRoute(
 			);
 		}
 		if (!env.CLOUDMAN_SECRET) {
-			console.warn(
-				"[api] CLOUDMAN_SECRET unset — storing SSH credential in PLAINTEXT",
+			return c.json(
+				{
+					error:
+						"Secret storage is not configured on this server (CLOUDMAN_SECRET missing). Server cannot be saved.",
+				},
+				503,
 			);
 		}
 		// Strip host from credential so it is never stored or returned in plaintext.
@@ -79,9 +83,7 @@ export function createServersRoute(
 			sshUser: parsed.data.sshUser,
 			authMode: parsed.data.authMode,
 			remoteAppDir: parsed.data.remoteAppDir,
-			credentialEnc: env.CLOUDMAN_SECRET
-				? encryptSecret(credential, env.CLOUDMAN_SECRET)
-				: credential,
+			credentialEnc: encryptSecret(credential, env.CLOUDMAN_SECRET),
 			userId: c.get("userId"),
 		});
 		const safe = server.toObject();
@@ -121,13 +123,18 @@ export function createServersRoute(
 			patch.remoteAppDir = parsed.data.remoteAppDir;
 		if (parsed.data.credential !== undefined) {
 			if (!env.CLOUDMAN_SECRET) {
-				console.warn(
-					"[api] CLOUDMAN_SECRET unset — storing SSH credential in PLAINTEXT",
+				return c.json(
+					{
+						error:
+							"Secret storage is not configured on this server (CLOUDMAN_SECRET missing). Server cannot be updated.",
+					},
+					503,
 				);
 			}
-			patch.credentialEnc = env.CLOUDMAN_SECRET
-				? encryptSecret(parsed.data.credential, env.CLOUDMAN_SECRET)
-				: parsed.data.credential;
+			patch.credentialEnc = encryptSecret(
+				parsed.data.credential,
+				env.CLOUDMAN_SECRET,
+			);
 		}
 		const updated = await Server.findOneAndUpdate(
 			{ _id: id, userId: c.get("userId") },
@@ -222,10 +229,7 @@ export function createServersRoute(
 				);
 			}
 			if (!observedFingerprint) {
-				return c.json(
-					{ ok: false, error: "Failed to verify host key" },
-					502,
-				);
+				return c.json({ ok: false, error: "Failed to verify host key" }, 502);
 			}
 			const firstSeen = !server.knownHostKey;
 			if (firstSeen) {
@@ -258,13 +262,18 @@ export function createServersRoute(
 					502,
 				);
 			}
+			// Raw ssh2 errors distinguish ECONNREFUSED / ETIMEDOUT / ENOTFOUND,
+			// which turns this endpoint into a port scanner for the API host's
+			// egress network. Log the detail, return a stable message.
+			console.error("[api] server verify failed", {
+				serverId: c.req.param("id"),
+				error: error instanceof Error ? error.message : String(error),
+			});
 			return c.json(
 				{
 					ok: false,
 					error:
-						error instanceof Error
-							? error.message
-							: "Failed to connect to server",
+						"Could not connect to server — check host, port, and credentials",
 				},
 				502,
 			);

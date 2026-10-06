@@ -30,7 +30,12 @@ function webAppGraph(): InfrastructureGraph {
 				config: {
 					description: "web tier",
 					ingressRules: [
-						{ fromPort: 80, toPort: 80, protocol: "tcp", cidrBlock: "0.0.0.0/0" },
+						{
+							fromPort: 80,
+							toPort: 80,
+							protocol: "tcp",
+							cidrBlock: "0.0.0.0/0",
+						},
 					],
 				},
 			},
@@ -51,12 +56,28 @@ function serverlessApiGraph(): InfrastructureGraph {
 		version: 1,
 		name: "serverless-api",
 		nodes: [
-			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "lambda" } },
+			{
+				id: "role-1",
+				type: "aws_iam_role",
+				config: { assumeService: "lambda" },
+			},
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{ id: "fn-1", type: "aws_lambda", config: { runtime: "nodejs22.x", memoryMb: 128 } },
-			{ id: "api-1", type: "aws_apigateway", config: { routePath: "/{proxy+}", httpMethod: "ANY" } },
+			{
+				id: "fn-1",
+				type: "aws_lambda",
+				config: { runtime: "nodejs22.x", memoryMb: 128 },
+			},
+			{
+				id: "api-1",
+				type: "aws_apigateway",
+				config: { routePath: "/{proxy+}", httpMethod: "ANY" },
+			},
 		],
-		edges: [edge("fn-1", "role-1"), edge("fn-1", "repo-1"), edge("api-1", "fn-1")],
+		edges: [
+			edge("fn-1", "role-1"),
+			edge("fn-1", "repo-1"),
+			edge("api-1", "fn-1"),
+		],
 	};
 }
 
@@ -81,16 +102,33 @@ function reactAppGraph(): InfrastructureGraph {
 				type: "aws_security_group",
 				config: {
 					description: "ecs tier",
-					ingressRules: [{ fromPort: 80, toPort: 80, protocol: "tcp", cidrBlock: "0.0.0.0/0" }],
+					ingressRules: [
+						{
+							fromPort: 80,
+							toPort: 80,
+							protocol: "tcp",
+							cidrBlock: "0.0.0.0/0",
+						},
+					],
 				},
 			},
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "ecs-tasks" } },
+			{
+				id: "role-1",
+				type: "aws_iam_role",
+				config: { assumeService: "ecs-tasks" },
+			},
 			{ id: "alb-1", type: "aws_alb", config: { scheme: "internet-facing" } },
 			{
 				id: "svc-1",
 				type: "aws_ecs",
-				config: { cpu: "0.25 vCPU", memory: "0.5 GB", containerPort: 80, desiredCount: 1, imageTag: "latest" },
+				config: {
+					cpu: "0.25 vCPU",
+					memory: "0.5 GB",
+					containerPort: 80,
+					desiredCount: 1,
+					imageTag: "latest",
+				},
 			},
 		],
 		edges: [
@@ -121,11 +159,25 @@ function dataPipelineGraph(): InfrastructureGraph {
 			{ id: "bucket-1", type: "aws_s3", config: { versioning: false } },
 			{ id: "queue-1", type: "aws_sqs", config: {} },
 			{ id: "table-1", type: "aws_dynamodb_table", config: { hashKey: "id" } },
-			{ id: "role-1", type: "aws_iam_role", config: { assumeService: "lambda" } },
+			{
+				id: "role-1",
+				type: "aws_iam_role",
+				config: { assumeService: "lambda" },
+			},
 			{ id: "repo-1", type: "aws_ecr", config: {} },
-			{ id: "fn-1", type: "aws_lambda", config: { runtime: "python3.13", memoryMb: 256 } },
+			{
+				id: "fn-1",
+				type: "aws_lambda",
+				config: { runtime: "python3.13", memoryMb: 256 },
+			},
 		],
-		edges: [edge("fn-1", "bucket-1"), edge("fn-1", "queue-1"), edge("fn-1", "table-1"), edge("fn-1", "role-1"), edge("fn-1", "repo-1")],
+		edges: [
+			edge("fn-1", "bucket-1"),
+			edge("fn-1", "queue-1"),
+			edge("fn-1", "table-1"),
+			edge("fn-1", "role-1"),
+			edge("fn-1", "repo-1"),
+		],
 	};
 }
 
@@ -161,7 +213,8 @@ const graphs: Record<string, BlueprintGraph> = {
 		metadata: {
 			id: "react-app",
 			name: "React App",
-			description: "Containerized React on ECS Fargate behind ALB — subnets are AZ-fixed",
+			description:
+				"Containerized React on ECS Fargate behind ALB — subnets are AZ-fixed",
 			tags: ["react", "react app", "frontend", "spa", "container", "ecs"],
 		},
 		build: reactAppGraph,
