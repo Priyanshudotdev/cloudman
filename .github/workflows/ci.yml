@@ -24,7 +24,8 @@ jobs:
       BETTER_AUTH_URL: http://localhost:4000
       CORS_ORIGIN: http://localhost:3001
       NEXT_PUBLIC_API_URL: http://localhost:4000
-      CLOUDMAN_SECRET: ababababababababababababababababababababababababababababababab
+      # Must be exactly 64 hex chars — packages/env validates it with /^[0-9a-fA-F]{64}$/
+      CLOUDMAN_SECRET: abababababababababababababababababababababababababababababababab
       CLOUDMAN_WORKER_MOCK: "1"
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +38,10 @@ jobs:
       - name: tests (core, repo, api e2e, worker mock)
         run: bunx turbo run test
       - name: web build
-        run: bunx turbo run build --filter=web
+        # apps/web imports @my-better-t-app/auth (the /api/auth/[...all]
+        # route), which validates env/server at build time. Mirror the
+        # Dockerfile web stage: skip validation so the build needs no secrets.
+        run: SKIP_ENV_VALIDATION=1 bunx turbo run build --filter=web
       - name: lint (non-blocking until biome is clean)
         run: bunx biome check .
         continue-on-error: true
