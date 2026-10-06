@@ -71,10 +71,10 @@ export default function Home() {
 			{/* Hero */}
 			<section className="border-b">
 				<div className="mx-auto max-w-4xl px-6 pt-20 pb-16 text-center sm:pt-28 sm:pb-24">
-					<span className="mb-6 inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 text-xs font-medium text-muted-foreground">
+					<span className="mb-6 inline-flex items-center gap-1.5 rounded-full border bg-muted/50 px-3 py-1 font-medium text-muted-foreground text-xs">
 						Visual infrastructure-as-code
 					</span>
-					<h1 className="text-4xl font-semibold tracking-tight text-balance sm:text-5xl">
+					<h1 className="text-balance font-semibold text-4xl tracking-tight sm:text-5xl">
 						Design AWS infrastructure visually.{" "}
 						<span className="text-brand">Deploy with confidence.</span>
 					</h1>
@@ -84,10 +84,7 @@ export default function Home() {
 						account.
 					</p>
 					<div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-						<Link
-							href="/login"
-							className={buttonVariants({ size: "lg" })}
-						>
+						<Link href="/login" className={buttonVariants({ size: "lg" })}>
 							<Rocket className="size-4" />
 							Start Free
 						</Link>
@@ -111,14 +108,14 @@ export default function Home() {
 								<span className="size-2.5 rounded-full bg-muted" />
 								<span className="size-2.5 rounded-full bg-muted" />
 							</div>
-							<span className="font-mono text-xs text-muted-foreground">
+							<span className="font-mono text-muted-foreground text-xs">
 								project canvas
 							</span>
 						</div>
 						<div className="flex h-72 items-center justify-center bg-muted/40 sm:h-96">
 							<div className="mx-auto max-w-md px-6 text-center">
 								<Network className="mx-auto mb-4 size-8 text-muted-foreground" />
-								<p className="text-sm text-muted-foreground">
+								<p className="text-muted-foreground text-sm">
 									The CloudMan canvas — drag resources, wire dependencies,
 									review the plan, deploy.
 								</p>
@@ -136,8 +133,8 @@ export default function Home() {
 							<div className="flex size-10 items-center justify-center rounded-md bg-brand-muted text-brand">
 								<Icon className="size-5" />
 							</div>
-							<h3 className="text-base font-semibold">{title}</h3>
-							<p className="text-sm text-muted-foreground">{description}</p>
+							<h3 className="font-semibold text-base">{title}</h3>
+							<p className="text-muted-foreground text-sm">{description}</p>
 						</div>
 					))}
 				</div>
@@ -146,7 +143,7 @@ export default function Home() {
 			{/* How it works */}
 			<section className="border-b">
 				<div className="mx-auto max-w-5xl px-6 py-16 sm:py-20">
-					<h2 className="mb-10 text-center text-2xl font-semibold tracking-tight">
+					<h2 className="mb-10 text-center font-semibold text-2xl tracking-tight">
 						From idea to infrastructure in three steps
 					</h2>
 					<div className="grid gap-10 sm:grid-cols-3 sm:gap-6">
@@ -156,12 +153,12 @@ export default function Home() {
 									<div className="flex size-10 items-center justify-center rounded-md border bg-card text-foreground">
 										<Icon className="size-5 text-brand" />
 									</div>
-									<span className="font-mono text-sm text-muted-foreground">
+									<span className="font-mono text-muted-foreground text-sm">
 										0{index + 1}
 									</span>
 								</div>
-								<h3 className="text-base font-semibold">{title}</h3>
-								<p className="text-sm text-muted-foreground">{description}</p>
+								<h3 className="font-semibold text-base">{title}</h3>
+								<p className="text-muted-foreground text-sm">{description}</p>
 							</div>
 						))}
 					</div>
@@ -171,7 +168,7 @@ export default function Home() {
 			{/* Capabilities */}
 			<section className="border-b">
 				<div className="mx-auto max-w-4xl px-6 py-16 sm:py-20">
-					<h2 className="mb-8 text-center text-2xl font-semibold tracking-tight">
+					<h2 className="mb-8 text-center font-semibold text-2xl tracking-tight">
 						Everything you need to design and ship infrastructure
 					</h2>
 					<ul className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
@@ -191,12 +188,12 @@ export default function Home() {
 			{/* Final CTA */}
 			<section>
 				<div className="mx-auto max-w-3xl px-6 py-16 text-center sm:py-24">
-					<h2 className="text-3xl font-semibold tracking-tight">
+					<h2 className="font-semibold text-3xl tracking-tight">
 						Ready to design your next stack?
 					</h2>
 					<p className="mx-auto mt-4 max-w-xl text-base text-muted-foreground">
-						Start designing infrastructure on a canvas and deploy it safely
-						into your own account.
+						Start designing infrastructure on a canvas and deploy it safely into
+						your own account.
 					</p>
 					<Link
 						href="/login"
@@ -212,11 +209,11 @@ export default function Home() {
 				<div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 py-8 sm:flex-row">
 					<div className="flex items-center gap-2">
 						<span className="font-semibold text-sm">CloudMan</span>
-						<span className="text-xs text-muted-foreground">
+						<span className="text-muted-foreground text-xs">
 							Visual AWS infrastructure control plane
 						</span>
 					</div>
-					<div className="flex items-center gap-4 text-xs text-muted-foreground">
+					<div className="flex items-center gap-4 text-muted-foreground text-xs">
 						<Link href="/dashboard" className="hover:text-foreground">
 							App
 						</Link>

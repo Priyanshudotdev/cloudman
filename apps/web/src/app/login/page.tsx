@@ -12,7 +12,10 @@ export default function LoginPage() {
 
 	return (
 		<div className="flex min-h-full flex-col items-center justify-center px-6 py-12">
-			<Link href="/" className="mb-8 flex items-center gap-2 font-semibold text-lg">
+			<Link
+				href="/"
+				className="mb-8 flex items-center gap-2 font-semibold text-lg"
+			>
 				<span className="flex size-8 items-center justify-center rounded-md bg-brand text-brand-foreground">
 					<Cloud className="size-4.5" />
 				</span>

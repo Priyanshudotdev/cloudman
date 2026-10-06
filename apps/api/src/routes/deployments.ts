@@ -9,6 +9,10 @@ import { streamSSE } from "hono/streaming";
 import { recordApiDeploymentEvent } from "../lib/deployment-events";
 import { type AppEnv, requireAuth } from "../lib/session";
 
+/** Cap on concurrent SSE streams per process; each one holds a Redis connection. */
+const MAX_ACTIVE_STREAMS = 200;
+let activeStreams = 0;
+
 export function createDeploymentsRoute(
 	auth: MiddlewareHandler<AppEnv> = requireAuth,
 ): Hono<AppEnv> {
@@ -37,43 +41,69 @@ export function createDeploymentsRoute(
 		const deployment = await loadOwnedDeployment(c, id);
 		if (!deployment) return c.json({ error: "Not found" }, 404);
 
+		// Each stream holds one dedicated Redis subscriber connection, so
+		// unbounded streams would exhaust Redis maxclients and take every queue
+		// consumer down with it. Cap concurrent viewers per process.
+		if (activeStreams >= MAX_ACTIVE_STREAMS) {
+			return c.json(
+				{ error: "Too many live deployment streams; retry shortly" },
+				503,
+			);
+		}
+		activeStreams++;
+		// Released on stream completion, client abort, or any failure below.
+		let released = false;
+		const release = () => {
+			if (released) return;
+			released = true;
+			activeStreams = Math.max(0, activeStreams - 1);
+		};
+
 		const backlog = [...deployment.events];
 
-		return streamSSE(c, async (stream) => {
-			let closed = false;
+		try {
+			return await streamSSE(c, async (stream) => {
+				let closed = false;
 
-			for (const event of backlog) {
-				await stream.writeSSE({
-					event: "deployment",
-					data: JSON.stringify(event),
-				});
-			}
-
-			const cleanup = closed
-				? null
-				: await subscribeDeploymentEvents(id, (event) => {
-						void stream.writeSSE({
-							event: "deployment",
-							data: JSON.stringify(event),
-						});
+				for (const event of backlog) {
+					await stream.writeSSE({
+						event: "deployment",
+						data: JSON.stringify(event),
 					});
-
-			const abort = () => {
-				closed = true;
-				cleanup?.();
-			};
-			c.req.raw.signal.addEventListener("abort", abort);
-
-			try {
-				while (!closed && !c.req.raw.signal.aborted) {
-					await stream.sleep(15_000);
-					await stream.writeSSE({ event: "ping", data: Date.now().toString() });
 				}
-			} finally {
-				cleanup?.();
-				c.req.raw.signal.removeEventListener("abort", abort);
-			}
-		});
+
+				const cleanup = await subscribeDeploymentEvents(id, (event) => {
+					void stream.writeSSE({
+						event: "deployment",
+						data: JSON.stringify(event),
+					});
+				});
+
+				const abort = () => {
+					closed = true;
+					cleanup();
+					release();
+				};
+				c.req.raw.signal.addEventListener("abort", abort);
+
+				try {
+					while (!closed && !c.req.raw.signal.aborted) {
+						await stream.sleep(15_000);
+						await stream.writeSSE({
+							event: "ping",
+							data: Date.now().toString(),
+						});
+					}
+				} finally {
+					cleanup();
+					release();
+					c.req.raw.signal.removeEventListener("abort", abort);
+				}
+			});
+		} catch (error) {
+			release();
+			throw error;
+		}
 	});
 
 	deploymentsRoute.post("/:id/approve", async (c) => {

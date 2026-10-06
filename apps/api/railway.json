@@ -1,9 +1,5 @@
 {
 	"$schema": "https://railway.com/railway.schema.json",
-	// Railway service settings for this file:
-	//   Root Directory  = repository root
-	//   Config File Path = apps/api/railway.json
-	// Commands run with the repo root as cwd, so no `cd` is needed.
 	"build": {
 		"builder": "NIXPACKS",
 		"buildCommand": "bun install"

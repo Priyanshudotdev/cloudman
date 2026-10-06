@@ -42,6 +42,5 @@ jobs:
         # route), which validates env/server at build time. Mirror the
         # Dockerfile web stage: skip validation so the build needs no secrets.
         run: SKIP_ENV_VALIDATION=1 bunx turbo run build --filter=web
-      - name: lint (non-blocking until biome is clean)
+      - name: lint
         run: bunx biome check .
-        continue-on-error: true

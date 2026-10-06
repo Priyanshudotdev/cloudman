@@ -235,8 +235,7 @@ export function DeploymentHistory({
 													</span>{" "}
 													<span
 														className={cn(
-															deployment.planSummary.update > 0 &&
-																"text-info",
+															deployment.planSummary.update > 0 && "text-info",
 														)}
 													>
 														~{deployment.planSummary.update}

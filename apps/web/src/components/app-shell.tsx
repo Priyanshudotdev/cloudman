@@ -1,6 +1,14 @@
 "use client";
 
-import { Boxes, Cloud, FileStack, HelpCircle, LayoutDashboard, Server, Variable } from "lucide-react";
+import {
+	Boxes,
+	Cloud,
+	FileStack,
+	HelpCircle,
+	LayoutDashboard,
+	Server,
+	Variable,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -29,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 	return (
 		<div className="flex h-full min-h-0">
 			<aside className="hidden w-14 shrink-0 flex-col bg-[#2e2e2e] sm:flex">
-				<div className="flex h-12 items-center justify-center border-b border-white/10">
+				<div className="flex h-12 items-center justify-center border-white/10 border-b">
 					<Link href="/dashboard" aria-label="Home">
 						<span className="flex size-7 items-center justify-center rounded-md bg-brand text-brand-foreground">
 							<Cloud className="size-4" />
@@ -44,7 +52,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 								key={item.href}
 								href={item.href as any}
 								className={`flex flex-col items-center gap-1 rounded-md px-1 py-2.5 text-[10px] leading-none transition-colors ${
-									active ? "bg-white/[0.08] text-white" : "text-white/50 hover:bg-white/5 hover:text-white"
+									active
+										? "bg-white/[0.08] text-white"
+										: "text-white/50 hover:bg-white/5 hover:text-white"
 								}`}
 							>
 								<item.icon className="size-4" />
@@ -53,26 +63,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 						);
 					})}
 				</nav>
-			<div className="flex flex-col gap-1 border-t border-white/10 p-2">
-				{NAV_BOTTOM.map((item) => {
-					const active = isActive(pathname, item.href);
-					return (
-						<Link
-							key={item.href}
-							href={item.href as any}
-							className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] leading-none transition-colors ${
-								active ? "bg-white/[0.08] text-white" : "text-white/40 hover:text-white/70 hover:bg-white/5"
-							}`}
-						>
-							<item.icon className="size-4" />
-							<span>{item.label}</span>
-						</Link>
-					);
-				})}
-				<div className="flex justify-center border-t border-white/10 pt-1">
-					<ApiStatus compact />
+				<div className="flex flex-col gap-1 border-white/10 border-t p-2">
+					{NAV_BOTTOM.map((item) => {
+						const active = isActive(pathname, item.href);
+						return (
+							<Link
+								key={item.href}
+								href={item.href as any}
+								className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] leading-none transition-colors ${
+									active
+										? "bg-white/[0.08] text-white"
+										: "text-white/40 hover:bg-white/5 hover:text-white/70"
+								}`}
+							>
+								<item.icon className="size-4" />
+								<span>{item.label}</span>
+							</Link>
+						);
+					})}
+					<div className="flex justify-center border-white/10 border-t pt-1">
+						<ApiStatus compact />
+					</div>
 				</div>
-			</div>
 			</aside>
 			<div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
 				{children}

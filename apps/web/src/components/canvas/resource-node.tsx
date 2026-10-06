@@ -45,7 +45,7 @@ export function ResourceNode({ data, selected }: NodeProps<ResourceFlowNode>) {
 					{Icon ? <Icon size={18} /> : null}
 				</span>
 				{/* warning triangle placeholder — shown at bottom right if you want to flag issues */}
-				<span className="pointer-events-none absolute -bottom-1 -right-1 hidden">
+				<span className="pointer-events-none absolute -right-1 -bottom-1 hidden">
 					<AlertTriangle className="size-3 text-[var(--brand)]" />
 				</span>
 				<Handle
@@ -61,10 +61,10 @@ export function ResourceNode({ data, selected }: NodeProps<ResourceFlowNode>) {
 			</div>
 			{/* n8n labels below node */}
 			<div className="mt-2 max-w-[128px] text-center">
-				<p className="truncate text-xs font-medium leading-tight text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
+				<p className="truncate font-medium text-white text-xs leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.6)]">
 					{data.label}
 				</p>
-				<p className="truncate text-[10px] leading-tight text-white/55">
+				<p className="truncate text-[10px] text-white/55 leading-tight">
 					{spec?.label ?? data.resourceType}
 				</p>
 			</div>

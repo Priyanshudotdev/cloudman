@@ -224,7 +224,7 @@ export function DeployPanel({
 			) : (
 				<>
 					{isDestroy && (
-						<div className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 font-medium text-destructive text-xs">
+						<div className="border-destructive/40 border-b bg-destructive/10 px-4 py-2 font-medium text-destructive text-xs">
 							Destruction mode — approved resources will be permanently removed.
 						</div>
 					)}

@@ -70,16 +70,15 @@ export default function Header() {
 				{links.map(({ to, label }) => {
 					const active =
 						to === "/dashboard"
-							? pathname === "/dashboard" ||
-								pathname.startsWith("/projects/")
+							? pathname === "/dashboard" || pathname.startsWith("/projects/")
 							: pathname.startsWith(to);
 					return (
 						<Link
 							key={to}
 							href={to as Route}
 							className={cn(
-								"rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
-								active && "bg-muted text-foreground font-medium",
+								"rounded-md px-3 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground",
+								active && "bg-muted font-medium text-foreground",
 							)}
 						>
 							{label}

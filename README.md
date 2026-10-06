@@ -213,22 +213,23 @@ the local workspace instead.
 
 ## Verification status
 
-- **179 tests across 4 suites**, all green via `bunx turbo run test`
+- **190 tests across 4 suites**, all green via `bunx turbo run test`
   (requires local MongoDB + Redis — `docker compose up -d`; CI provides them):
-  - `packages/core`: 90 unit tests (validation, cycles, topological order, IR
+  - `packages/core`: 95 unit tests (validation, cycles, topological order, IR
     defaults, CIDR math, networking wiring rules, compiled HCL assertions,
     cost estimation & risk analysis, blueprint generation, CloudFormation export,
-    HCL/CFN conformance)
+    HCL/CFN conformance, HCL interpolation escaping)
   - `packages/repo`: 37 unit tests (stack detection, build recipes, runtime
     rendering incl. shell-escaping, deploy planning)
-  - `apps/api`: 41 e2e tests (auth wall + ownership, kind guards, CAS approve,
-    event persistence, compile preview, cost/risk, stack generation,
+  - `apps/api`: 46 e2e tests (auth wall + ownership, kind guards, CAS approve,
+    event persistence, rate limiting, compile preview, cost/risk, stack generation,
     projects + updates, graph versions, AWS connections, full deployment
     lifecycle, guarded deletes/cancel, retry, dashboard analytics, CloudFormation export, route53 records)
-  - `apps/worker`: 11 mock-job tests (plan/apply provisioning, destroy, skips,
-    repo-deploy)
-- `bun run check-types` passes in every workspace that defines it; Biome is
-  enforced non-blocking in CI (`continue-on-error`) until the tree is clean
+  - `apps/worker`: 12 mock-job tests (plan/apply provisioning, destroy, skips,
+    repo-deploy, backend.tf injection guards)
+- `bun run check-types` passes in every workspace that defines it, and
+  `bunx biome check .` is clean (errors are blocking in CI; warnings remain as
+  advisory diagnostics)
 - Compiler output accepted by OpenTofu's own HCL parser (`tofu fmt -check` clean)
 - Full lifecycle verified end-to-end (mock mode): canvas graph → queued →
   planning → awaiting_approval → approved → completed, with persisted audit
@@ -264,16 +265,16 @@ the local workspace instead.
   real-mode connection verification is validated up to the AWS API call)
 - Real SSH repo-deploys against a staging host (mock-covered; needs a
   documented manual runbook)
-- Biome-clean tree so the CI lint step can become blocking
+- Clear the 56 advisory Biome warnings (`noNonNullAssertion`, `useTemplate`,
+  `noExplicitAny` are the bulk) now that errors gate CI
 
 ## Deploying
 
 - **Web → Vercel** (`vercel.json`; linked project `cloudman-web`). Sync env with
   `bun run env:production` (reads `apps/web/.env`, skips local-only keys).
-- **API + worker → Railway** (`apps/api/railway.json`, `apps/worker/railway.json`).
-  Service settings: Root Directory = repository root,
-  Config File Path = `apps/<service>/railway.json`. Railway has no persistent
-  volumes — keep `CLOUDMAN_REMOTE_STATE=1` (default) and set
+- **API + worker → Railway** (`apps/api/railway.json`, `apps/worker/railway.json`;
+  see `apps/railway-README.md` for the required dashboard settings). Railway has
+  no persistent volumes — keep `CLOUDMAN_REMOTE_STATE=1` (default) and set
   `CLOUDMAN_TOFU_AUTOINSTALL=1` on the worker for real runs.
 - **Single host → Docker** (`docker-compose.prod.yml`). Copy
   `.env.production.example` to `.env.production`, fill it in, and

@@ -334,17 +334,17 @@ export function createProjectsRoute(
 				);
 			}
 
-const version = project.latestGraphVersion + 1;
-		let graphVersionId: unknown;
-		try {
-			const created = await GraphVersion.create({
-				projectId: id,
-				version,
-				graph: parsed.data.graph,
-				createdByUserId: c.get("userId"),
-			});
-			graphVersionId = created._id;
-		} catch (error) {
+			const version = project.latestGraphVersion + 1;
+			let graphVersionId: unknown;
+			try {
+				const created = await GraphVersion.create({
+					projectId: id,
+					version,
+					graph: parsed.data.graph,
+					createdByUserId: c.get("userId"),
+				});
+				graphVersionId = created._id;
+			} catch (error) {
 				if ((error as { code?: number }).code === 11000) {
 					return c.json({ error: "Version conflict, retry save" }, 409);
 				}

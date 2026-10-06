@@ -29,15 +29,15 @@ export function ConfigPanel({
 }: ConfigPanelProps) {
 	if (!spec || !nodeId) {
 		return (
-			<div className="flex w-72 shrink-0 items-start justify-center border-l border-white/10 bg-[#1e1e1e] p-6 text-sm text-white/40">
+			<div className="flex w-72 shrink-0 items-start justify-center border-white/10 border-l bg-[#1e1e1e] p-6 text-sm text-white/40">
 				Select a node to configure it.
 			</div>
 		);
 	}
 
 	return (
-		<div className="flex h-full w-72 shrink-0 flex-col overflow-y-auto border-l border-white/10 bg-[#1e1e1e] shadow-[-4px_0_16px_rgba(0,0,0,0.5)]">
-			<div className="flex items-center justify-between border-b border-white/10 bg-[#1e1e1e] px-4 py-3">
+		<div className="flex h-full w-72 shrink-0 flex-col overflow-y-auto border-white/10 border-l bg-[#1e1e1e] shadow-[-4px_0_16px_rgba(0,0,0,0.5)]">
+			<div className="flex items-center justify-between border-white/10 border-b bg-[#1e1e1e] px-4 py-3">
 				<div className="min-w-0">
 					<p className="font-semibold text-sm text-white">{spec.label}</p>
 					<p className="truncate font-mono text-[11px] text-white/40">
@@ -58,7 +58,9 @@ export function ConfigPanel({
 			</div>
 			<div className="flex flex-col gap-4 p-4">
 				<div className="grid gap-1.5">
-					<Label htmlFor="node-label" className="text-white/80">Name</Label>
+					<Label htmlFor="node-label" className="text-white/80">
+						Name
+					</Label>
 					<Input
 						id="node-label"
 						value={nodeLabel}
@@ -97,9 +99,11 @@ function FieldInput({
 					id={id}
 					checked={Boolean(value)}
 					onCheckedChange={(checked) => onChange(checked === true)}
-					className="border-white/20 data-[state=checked]:bg-brand data-[state=checked]:border-brand"
+					className="border-white/20 data-[state=checked]:border-brand data-[state=checked]:bg-brand"
 				/>
-				<Label htmlFor={id} className="text-white/80">{field.label}</Label>
+				<Label htmlFor={id} className="text-white/80">
+					{field.label}
+				</Label>
 			</div>
 		);
 	}
@@ -107,7 +111,9 @@ function FieldInput({
 	if (field.type === "select") {
 		return (
 			<div className="grid gap-1.5">
-				<Label htmlFor={id} className="text-white/70">{field.label}</Label>
+				<Label htmlFor={id} className="text-white/70">
+					{field.label}
+				</Label>
 				<select
 					id={id}
 					className="h-9 rounded-md border border-white/10 bg-[#2e2e2e] px-3 text-sm text-white"
@@ -338,7 +344,7 @@ function ItemFieldInput({
 					{field.label}
 				</Label>
 				<select
-					className="h-8 rounded-md border border-white/10 bg-[#2e2e2e] px-2 text-xs text-white"
+					className="h-8 rounded-md border border-white/10 bg-[#2e2e2e] px-2 text-white text-xs"
 					id={id}
 					value={String(value ?? field.default ?? "")}
 					onChange={(event) => onChange(event.target.value)}
@@ -359,7 +365,7 @@ function ItemFieldInput({
 				{field.label}
 			</Label>
 			<Input
-				className="h-8 border-white/10 bg-[#2e2e2e] text-xs text-white placeholder:text-white/30"
+				className="h-8 border-white/10 bg-[#2e2e2e] text-white text-xs placeholder:text-white/30"
 				id={id}
 				max={field.max}
 				min={field.min}

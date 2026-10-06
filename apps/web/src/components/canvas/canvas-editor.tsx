@@ -35,11 +35,11 @@ import {
 	RESOURCE_SPECS,
 	type ResourceUiSpec,
 } from "@/lib/resource-catalog";
+import { DeploymentHistory } from "../deployments/deployment-history";
 import { CompilePreview } from "./compile-preview";
 import { ConfigPanel } from "./config-panel";
 import { DeployPanel } from "./deploy-panel";
 import { GraphVersions } from "./graph-versions";
-import { DeploymentHistory } from "../deployments/deployment-history";
 import { type ResourceFlowNode, ResourceNode } from "./resource-node";
 
 const nodeTypes = { resource: ResourceNode };
@@ -436,10 +436,10 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 	return (
 		<div className="relative flex h-full min-h-0 flex-col bg-[#1e1e1e]">
 			{/* n8n top bar */}
-			<div className="flex h-11 shrink-0 items-center gap-2 border-b border-white/10 bg-[#2e2e2e] px-3 text-white">
+			<div className="flex h-11 shrink-0 items-center gap-2 border-white/10 border-b bg-[#2e2e2e] px-3 text-white">
 				<Link
 					href="/dashboard"
-					className="shrink-0 text-xs text-white/60 hover:text-white"
+					className="shrink-0 text-white/60 text-xs hover:text-white"
 				>
 					← Projects
 				</Link>
@@ -460,7 +460,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 								setEditingName(false);
 							}
 						}}
-						className="h-6 min-w-0 max-w-52 rounded-md border border-white/20 bg-[#1e1e1e] px-2 text-sm font-medium text-white focus:border-white/40 focus:outline-none"
+						className="h-6 min-w-0 max-w-52 rounded-md border border-white/20 bg-[#1e1e1e] px-2 font-medium text-sm text-white focus:border-white/40 focus:outline-none"
 					/>
 				) : (
 					<button
@@ -472,8 +472,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						}}
 						className={
 							projectName === "Untitled project"
-								? "min-w-0 truncate text-sm font-medium italic text-white/60 hover:text-white"
-								: "min-w-0 truncate text-sm font-medium text-white hover:text-white/80"
+								? "min-w-0 truncate font-medium text-sm text-white/60 italic hover:text-white"
+								: "min-w-0 truncate font-medium text-sm text-white hover:text-white/80"
 						}
 					>
 						{projectName === "Untitled project"
@@ -482,11 +482,14 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					</button>
 				)}
 				{version > 0 && (
-					<Badge variant="secondary" className="h-5 bg-white/10 px-1.5 text-[10px] font-normal text-white/70">
+					<Badge
+						variant="secondary"
+						className="h-5 bg-white/10 px-1.5 font-normal text-[10px] text-white/70"
+					>
 						v{version}
 					</Badge>
 				)}
-				<span className="hidden text-xs text-white/40 sm:inline">
+				<span className="hidden text-white/40 text-xs sm:inline">
 					· {nodes.length} nodes · {edges.length} connections
 				</span>
 
@@ -498,8 +501,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							onClick={() => setView("editor")}
 							className={
 								view === "editor"
-									? "rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]"
-									: "px-3 py-1 text-xs text-white/50 hover:text-white/80"
+									? "rounded bg-white px-3 py-1 font-medium text-[#1a1a1a] text-xs"
+									: "px-3 py-1 text-white/50 text-xs hover:text-white/80"
 							}
 						>
 							Editor
@@ -509,8 +512,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							onClick={() => setView("executions")}
 							className={
 								view === "executions"
-									? "rounded bg-white px-3 py-1 text-xs font-medium text-[#1a1a1a]"
-									: "px-3 py-1 text-xs text-white/50 hover:text-white/80"
+									? "rounded bg-white px-3 py-1 font-medium text-[#1a1a1a] text-xs"
+									: "px-3 py-1 text-white/50 text-xs hover:text-white/80"
 							}
 						>
 							Executions
@@ -531,14 +534,14 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							onChange={(event) => setGeneratePrompt(event.target.value)}
 							placeholder="Describe a stack…"
 							disabled={generating || busy}
-							className="h-7 w-36 rounded-md border border-white/10 bg-[#1e1e1e] px-2.5 text-xs text-white placeholder:text-white/40 focus:border-white/20 focus:outline-none disabled:opacity-50 lg:w-48"
+							className="h-7 w-36 rounded-md border border-white/10 bg-[#1e1e1e] px-2.5 text-white text-xs placeholder:text-white/40 focus:border-white/20 focus:outline-none disabled:opacity-50 lg:w-48"
 						/>
 						<Button
 							type="submit"
 							variant="outline"
 							size="sm"
 							disabled={generating || busy}
-							className="h-7 border-white/10 bg-transparent px-2.5 text-xs text-white hover:bg-white/10 hover:text-white"
+							className="h-7 border-white/10 bg-transparent px-2.5 text-white text-xs hover:bg-white/10 hover:text-white"
 						>
 							{generating ? "…" : "Generate"}
 						</Button>
@@ -549,7 +552,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => setVersionsOpen(true)}
-						className="hidden h-7 text-xs text-white/70 hover:bg-white/10 hover:text-white sm:inline-flex"
+						className="hidden h-7 text-white/70 text-xs hover:bg-white/10 hover:text-white sm:inline-flex"
 					>
 						Versions
 					</Button>
@@ -558,7 +561,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleValidate()}
-						className="h-7 border-white/10 bg-transparent text-xs text-white hover:bg-white/10 hover:text-white"
+						className="h-7 border-white/10 bg-transparent text-white text-xs hover:bg-white/10 hover:text-white"
 					>
 						Validate
 					</Button>
@@ -567,7 +570,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleSave()}
-						className="h-7 border-white/10 bg-transparent text-xs text-white hover:bg-white/10 hover:text-white"
+						className="h-7 border-white/10 bg-transparent text-white text-xs hover:bg-white/10 hover:text-white"
 					>
 						Save
 					</Button>
@@ -576,7 +579,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleDeploy("destroy")}
-						className="h-7 bg-[#4a1a1a] text-xs text-red-200 hover:bg-[#5a2020]"
+						className="h-7 bg-[#4a1a1a] text-red-200 text-xs hover:bg-[#5a2020]"
 					>
 						Destroy
 					</Button>
@@ -584,7 +587,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 						size="sm"
 						disabled={busy}
 						onClick={() => void handleDeploy("provision")}
-						className="h-7 bg-brand px-3 text-xs font-medium text-brand-foreground hover:bg-brand/90"
+						className="h-7 bg-brand px-3 font-medium text-brand-foreground text-xs hover:bg-brand/90"
 					>
 						Deploy
 					</Button>
@@ -592,8 +595,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 			</div>
 
 			{issues.length > 0 && (
-				<div className="border-b border-red-900/50 bg-[#3a1a1a] px-4 py-2">
-					<p className="mb-1 text-xs font-semibold text-red-300">
+				<div className="border-red-900/50 border-b bg-[#3a1a1a] px-4 py-2">
+					<p className="mb-1 font-semibold text-red-300 text-xs">
 						{issues.length} validation issue(s)
 					</p>
 					<ul className="space-y-0.5 font-mono text-[11px] text-red-300/80">
@@ -606,8 +609,8 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 
 			<div className="flex min-h-0 flex-1">
 				{/* n8n left palette — dark */}
-				<div className="hidden w-52 shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-[#2e2e2e] p-2 sm:flex">
-					<p className="px-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-white/40">
+				<div className="hidden w-52 shrink-0 flex-col overflow-y-auto border-white/10 border-r bg-[#2e2e2e] p-2 sm:flex">
+					<p className="px-1 pb-2 font-semibold text-[10px] text-white/40 uppercase tracking-widest">
 						Resources
 					</p>
 					<div className="flex flex-col gap-1">
@@ -623,7 +626,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 									);
 									event.dataTransfer.effectAllowed = "move";
 								}}
-								className="flex items-center gap-2 rounded-md border border-white/5 bg-[#3a3a3a] px-2 py-1.5 text-left text-xs text-white/80 hover:border-white/10 hover:bg-[#404040] active:cursor-grabbing"
+								className="flex items-center gap-2 rounded-md border border-white/5 bg-[#3a3a3a] px-2 py-1.5 text-left text-white/80 text-xs hover:border-white/10 hover:bg-[#404040] active:cursor-grabbing"
 							>
 								<span
 									className="flex size-6 shrink-0 items-center justify-center rounded text-white"
@@ -635,7 +638,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 							</button>
 						))}
 					</div>
-					<p className="px-1 pt-4 text-[10px] leading-snug text-white/30">
+					<p className="px-1 pt-4 text-[10px] text-white/30 leading-snug">
 						Drag onto canvas to add. Connect with handles.
 					</p>
 				</div>
@@ -681,7 +684,7 @@ function CanvasEditorInner({ projectId }: { projectId: string }) {
 					{/* n8n add node (+) floating button — top right of canvas */}
 					<button
 						type="button"
-						className="absolute right-3 top-3 flex size-7 items-center justify-center rounded-md border border-white/10 bg-[#2e2e2e] text-white/70 shadow hover:bg-[#3a3a3a] hover:text-white"
+						className="absolute top-3 right-3 flex size-7 items-center justify-center rounded-md border border-white/10 bg-[#2e2e2e] text-white/70 shadow hover:bg-[#3a3a3a] hover:text-white"
 						title="Add node (drag from left)"
 						onClick={() => toast.info("Drag a resource from the left palette")}
 					>

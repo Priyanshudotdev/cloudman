@@ -1,14 +1,5 @@
 {
 	"$schema": "https://railway.com/railway.schema.json",
-	// Railway service settings for this file:
-	//   Root Directory  = repository root
-	//   Config File Path = apps/worker/railway.json
-	// Commands run with the repo root as cwd, so no `cd` is needed.
-	// NOTE: Railway has no persistent volumes — OpenTofu workspaces are
-	// ephemeral here. Keep CLOUDMAN_REMOTE_STATE=1 (default) so state lives
-	// in the per-project S3 bucket and survives redeploys. Real (non-mock)
-	// runs also need CLOUDMAN_TOFU_AUTOINSTALL=1 since the Nixpacks image
-	// ships no OpenTofu binary.
 	"build": {
 		"builder": "NIXPACKS",
 		"buildCommand": "bun install"

@@ -58,7 +58,7 @@ export default function SignUpForm({
 
 	return (
 		<div className="mx-auto mt-10 w-full max-w-md p-6">
-			<h1 className="mb-6 text-center text-2xl font-semibold tracking-tight">
+			<h1 className="mb-6 text-center font-semibold text-2xl tracking-tight">
 				Create your account
 			</h1>
 
