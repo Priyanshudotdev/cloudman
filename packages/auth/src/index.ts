@@ -9,14 +9,28 @@ export function createAuth(db: Db) {
 	return betterAuth({
 		database: mongodbAdapter(db),
 		trustedOrigins: [env.CORS_ORIGIN],
-		// Cross-domain setup: the web (auth UI) and the API live on different
-		// origins (e.g. web on Vercel, api on Railway). Browsers only attach a
-		// SameSite=Lax cookie on same-site requests, which would drop the session
-		// when the frontend calls the API cross-origin. Using SameSite=None (with
-		// Secure) lets the browser send the session cookie on those cross-site
-		// fetches; CORS already allows credentials for env.CORS_ORIGIN.
-		sameSite: "none",
-		useSecureCookies: true,
+		advanced: {
+			// Cross-domain setup: the web (auth UI) and the API live on different
+			// origins (e.g. web on Vercel, api on Railway). Browsers only attach a
+			// SameSite=Lax cookie on same-site requests, which would drop the session
+			// when the frontend calls the API cross-origin. SameSite=None (with
+			// Secure) lets the browser send the session cookie on those cross-site
+			// fetches; CORS already allows credentials for env.CORS_ORIGIN.
+			//
+			// These MUST live under `advanced`: top-level sameSite/useSecureCookies
+			// are silently ignored by better-auth (the cookie factory only reads
+			// options.advanced), which previously left the cookie at Lax and broke
+			// cross-origin auth in production while working on localhost.
+			//
+			// SameSite=None re-opens cross-site form-POST CSRF, so every mutating
+			// API route is additionally guarded by the Origin-check middleware in
+			// apps/api/src/lib/csrf.ts. Do not weaken one without the other.
+			useSecureCookies: true,
+			defaultCookieAttributes: {
+				sameSite: "none",
+				secure: true,
+			},
+		},
 		emailAndPassword: {
 			enabled: true,
 		},

@@ -3,6 +3,7 @@ import { env } from "@my-better-t-app/env/server";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
+import { csrfProtection } from "./lib/csrf";
 import { logger } from "hono/logger";
 import { type AppEnv, requireAuth } from "./lib/session";
 import { createAnalyticsRoute } from "./routes/analytics";
@@ -63,6 +64,10 @@ export function createApp(options: CreateAppOptions = {}): Hono<AppEnv> {
 	app.on(["POST", "GET"], "/api/auth/*", async (c) =>
 		(await getAuth()).handler(c.req.raw),
 	);
+
+	// CSRF guard for our own routes (the middleware itself skips /api/auth/*,
+// where better-auth performs its own origin/trustedOrigins checks).
+	app.use("/api/*", csrfProtection);
 
 	app.route("/api/projects", createProjectsRoute(authMiddleware));
 	app.route("/api/analytics", createAnalyticsRoute(authMiddleware));

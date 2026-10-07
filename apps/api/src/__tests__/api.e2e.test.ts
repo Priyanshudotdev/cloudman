@@ -9,6 +9,9 @@ process.env.BETTER_AUTH_SECRET = "test-secret-0123456789abcdefghijklmnop";
 process.env.BETTER_AUTH_URL = "http://localhost:4000";
 process.env.CORS_ORIGIN = "http://localhost:3001";
 process.env.SKIP_ENV_VALIDATION = "true";
+// Pin the auth wall: a local apps/api/.env with ALLOW_ANON=1 would otherwise be
+// loaded by dotenv and silently disable the 401 assertions below.
+process.env.ALLOW_ANON = "0";
 
 const originalGetBuiltinModule: (id: string) => NodeJS.Module | undefined =
 	// biome-ignore lint/style/noNonNullAssertion: process prod isn't pre-patched
@@ -1217,6 +1220,29 @@ async function authedRequest(
 }
 
 describe("api auth wall + ownership", () => {
+	test("session cookie carries cross-origin attributes", async () => {
+		// The web/API split needs SameSite=None + Secure, otherwise browsers
+		// drop the cookie on cross-origin fetches. These options are silently
+		// ignored anywhere but options.advanced, so this test pins them.
+		const res = await realAuthApp.request("/api/auth/sign-up/email", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				name: "cookie-attrs@example.com",
+				email: "cookie-attrs@example.com",
+				password: "test-password-12345",
+			}),
+		});
+		expect(res.status).toBe(200);
+		const setCookie =
+			typeof res.headers.getSetCookie === "function"
+				? res.headers.getSetCookie().join("; ")
+				: (res.headers.get("set-cookie") ?? "");
+		expect(setCookie.toLowerCase()).toContain("samesite=none");
+		expect(setCookie.toLowerCase()).toContain("secure");
+		expect(setCookie.toLowerCase()).toContain("httponly");
+	});
+
 	test("ALLOW_ANON opt-in serves the shared workspace user", async () => {
 		const { createApp } = await import("../app");
 		const { createRequireAuth } = await import("../lib/session");
